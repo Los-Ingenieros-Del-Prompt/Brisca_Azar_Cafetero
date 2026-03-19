@@ -1,0 +1,94 @@
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+*.out
+*.err
+
+# =========================
+# Environment / secrets
+# =========================
+.env
+.env.*
+*.env
+*.key
+*.pem
+*.crt
+secrets/
+config/local/
+
+# =========================
+# Java (Maven / Gradle)
+# =========================
+target/
+build/
+out/
+
+# Maven
+.mvn/
+!/.mvn/wrapper/maven-wrapper.jar
+
+# Gradle
+.gradle/
+
+# =========================
+# Compiled files
+# =========================
+*.class
+*.jar
+*.war
+*.ear
+
+# =========================
+# IDEs / Editors
+# =========================
+
+# IntelliJ
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+
+# Eclipse
+.project
+.classpath
+.settings/
+
+# =========================
+# Docker
+# =========================
+docker-compose.override.yml
+*.tar
+*.gz
+
+# =========================
+# Node (if you use tools or frontend later)
+# =========================
+node_modules/
+dist/
+coverage/
+
+# =========================
+# Temporary files
+# =========================
+tmp/
+temp/
+*.tmp
+
+# =========================
+# Test output
+# =========================
+/reports/
+/test-results/
+
+
+.idea
+.code
