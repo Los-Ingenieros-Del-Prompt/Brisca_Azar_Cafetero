@@ -43,8 +43,10 @@ public class GameService implements
 
     @Override
     public GameStateDTO createGame(CreateGameCommand command) {
+        // If game already exists, just return the current state
         if (gameRepository.exists(command.gameId())) {
-            throw new IllegalArgumentException("Game already exists: " + command.gameId());
+            Game existingGame = gameRepository.findById(command.gameId()).orElseThrow();
+            return gameMapper.toFullGameStateDTO(existingGame);
         }
 
         Game game = new Game(command.gameId(), command.minPlayers(), command.maxPlayers());
@@ -52,27 +54,37 @@ public class GameService implements
 
         eventPublisher.publishGameCreated(game.getId());
 
-        return gameMapper.toPublicGameStateDTO(game);
+        return gameMapper.toFullGameStateDTO(game);
     }
 
     @Override
     public GameStateDTO joinGame(JoinGameCommand command) {
         Game game = findGameOrThrow(command.gameId());
 
-        Player player = new Player(command.playerId(), command.playerName());
-        game.addPlayer(player);
+        // Check if player is already in the game
+        boolean alreadyJoined = game.getPlayers().stream()
+                .anyMatch(p -> p.getId().equals(command.playerId()));
 
-        gameRepository.save(game);
+        if (!alreadyJoined) {
+            Player player = new Player(command.playerId(), command.playerName());
+            game.addPlayer(player);
+            gameRepository.save(game);
+            eventPublisher.publishPlayerJoined(game.getId(), player.getId());
+        }
 
-        eventPublisher.publishPlayerJoined(game.getId(), player.getId());
-        eventPublisher.publishGameStateUpdated(gameMapper.toPublicGameStateDTO(game));
+        eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
 
-        return gameMapper.toGameStateDTO(game, command.playerId());
+        return gameMapper.toFullGameStateDTO(game);
     }
 
     @Override
     public GameStateDTO startGame(StartGameCommand command) {
         Game game = findGameOrThrow(command.gameId());
+
+        // If game is already started, just return current state
+        if (game.getState() != com.aguardientes.azarcafetero.domain.model.GameState.WAITING_FOR_PLAYERS) {
+            return gameMapper.toFullGameStateDTO(game);
+        }
 
         gameRules.validateGameStart(game);
         game.start();
@@ -80,9 +92,9 @@ public class GameService implements
         gameRepository.save(game);
 
         eventPublisher.publishGameStarted(game.getId());
-        eventPublisher.publishGameStateUpdated(gameMapper.toPublicGameStateDTO(game));
+        eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
 
-        return gameMapper.toPublicGameStateDTO(game);
+        return gameMapper.toFullGameStateDTO(game);
     }
 
     @Override
@@ -141,6 +153,18 @@ public class GameService implements
     public GameStateDTO getGameState(String gameId) {
         Game game = findGameOrThrow(gameId);
         return gameMapper.toPublicGameStateDTO(game);
+    }
+
+    @Override
+    public GameStateDTO getGameState(String gameId, String playerId) {
+        Game game = findGameOrThrow(gameId);
+        return gameMapper.toGameStateDTO(game, playerId);
+    }
+
+    @Override
+    public GameStateDTO getGameStateWithAllHands(String gameId) {
+        Game game = findGameOrThrow(gameId);
+        return gameMapper.toFullGameStateDTO(game);
     }
 
     private Game findGameOrThrow(String gameId) {

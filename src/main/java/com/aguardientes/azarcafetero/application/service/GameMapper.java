@@ -120,4 +120,32 @@ public class GameMapper {
                 toPlayerDTO(winner, false)
         );
     }
+
+    public GameStateDTO toFullGameStateDTO(Game game) {
+        if (game == null) {
+            return null;
+        }
+        
+        // Include ALL hands for all players (for testing/debugging)
+        List<PlayerDTO> players = game.getPlayers().stream()
+                .map(player -> toPlayerDTO(player, true))
+                .toList();
+        
+        Player currentPlayer = game.getCurrentPlayer();
+        String currentPlayerId = currentPlayer != null ? currentPlayer.getId() : null;
+        
+        Player winner = game.getWinner();
+        
+        return new GameStateDTO(
+                game.getId(),
+                game.getState(),
+                players,
+                currentPlayerId,
+                toTrickDTO(game.getCurrentTrick()),
+                toCardDTO(game.getTrumpCard()),
+                game.getTrumpSuit(),
+                game.getDeck().remainingCards(),
+                toPlayerDTO(winner, false)
+        );
+    }
 }
