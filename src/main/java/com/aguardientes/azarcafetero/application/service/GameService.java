@@ -43,16 +43,13 @@ public class GameService implements
 
     @Override
     public GameStateDTO createGame(CreateGameCommand command) {
-        // If game already exists, just return the current state
-        if (gameRepository.exists(command.gameId())) {
-            Game existingGame = gameRepository.findById(command.gameId()).orElseThrow();
-            return gameMapper.toFullGameStateDTO(existingGame);
-        }
-
-        Game game = new Game(command.gameId(), command.minPlayers(), command.maxPlayers());
-        gameRepository.save(game);
-
-        eventPublisher.publishGameCreated(game.getId());
+        // Use computeIfAbsent for atomic get-or-create operation
+        Game game = gameRepository.findById(command.gameId()).orElseGet(() -> {
+            Game newGame = new Game(command.gameId(), command.minPlayers(), command.maxPlayers());
+            gameRepository.save(newGame);
+            eventPublisher.publishGameCreated(newGame.getId());
+            return newGame;
+        });
 
         return gameMapper.toFullGameStateDTO(game);
     }
@@ -61,20 +58,23 @@ public class GameService implements
     public GameStateDTO joinGame(JoinGameCommand command) {
         Game game = findGameOrThrow(command.gameId());
 
-        // Check if player is already in the game
-        boolean alreadyJoined = game.getPlayers().stream()
-                .anyMatch(p -> p.getId().equals(command.playerId()));
+        // Synchronize on the game object to prevent race conditions
+        synchronized (game) {
+            // Check if player is already in the game
+            boolean alreadyJoined = game.getPlayers().stream()
+                    .anyMatch(p -> p.getId().equals(command.playerId()));
 
-        if (!alreadyJoined) {
-            Player player = new Player(command.playerId(), command.playerName());
-            game.addPlayer(player);
-            gameRepository.save(game);
-            eventPublisher.publishPlayerJoined(game.getId(), player.getId());
+            if (!alreadyJoined) {
+                Player player = new Player(command.playerId(), command.playerName());
+                game.addPlayer(player);
+                gameRepository.save(game);
+                eventPublisher.publishPlayerJoined(game.getId(), player.getId());
+            }
+
+            eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
+
+            return gameMapper.toFullGameStateDTO(game);
         }
-
-        eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
-
-        return gameMapper.toFullGameStateDTO(game);
     }
 
     @Override
