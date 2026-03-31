@@ -15,6 +15,7 @@ public class Game {
     private final Trick currentTrick;
     private GameState state;
     private int currentPlayerIndex;
+    private final Object playerLock = new Object(); // Lock for thread-safe player operations
 
     public Game(String id, int minPlayers, int maxPlayers) {
         this.id = Objects.requireNonNull(id, "Game ID cannot be null");
@@ -58,17 +59,19 @@ public class Game {
         return players.get(currentPlayerIndex);
     }
 
-    public void addPlayer(Player player) {
-        if (state != GameState.WAITING_FOR_PLAYERS) {
-            throw new IllegalStateException("Cannot add players once game has started");
+    public synchronized void addPlayer(Player player) {
+        synchronized (playerLock) {
+            if (state != GameState.WAITING_FOR_PLAYERS) {
+                throw new IllegalStateException("Cannot add players once game has started");
+            }
+            if (players.size() >= maxPlayers) {
+                throw new GameFullException(id);
+            }
+            if (players.stream().anyMatch(p -> p.getId().equals(player.getId()))) {
+                throw new IllegalArgumentException("Player already in game: " + player.getId());
+            }
+            players.add(player);
         }
-        if (players.size() >= maxPlayers) {
-            throw new GameFullException(id);
-        }
-        if (players.stream().anyMatch(p -> p.getId().equals(player.getId()))) {
-            throw new IllegalArgumentException("Player already in game: " + player.getId());
-        }
-        players.add(player);
     }
 
     public void start() {
