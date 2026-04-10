@@ -9,7 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 public class InMemoryGameRepository implements GameRepository {
-    
+
     private final ConcurrentHashMap<String, Game> games = new ConcurrentHashMap<>();
 
     @Override
@@ -35,11 +35,8 @@ public class InMemoryGameRepository implements GameRepository {
         return games.containsKey(gameId);
     }
 
-    /**
-     * Atomically get or create a game. This prevents race conditions
-     * when multiple players try to create the same game simultaneously.
-     */
     public Game getOrCreate(String gameId, int minPlayers, int maxPlayers) {
-        return games.computeIfAbsent(gameId, id -> new Game(id, minPlayers, maxPlayers));
+        return games.computeIfAbsent(gameId, id ->
+                new Game(id, minPlayers, maxPlayers, java.math.BigDecimal.ZERO));
     }
 }
