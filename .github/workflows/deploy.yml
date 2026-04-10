@@ -35,4 +35,10 @@ jobs:
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/azar-brisca:latest
             docker stop azar-brisca || true
             docker rm azar-brisca || true
-            docker run -d --name azar-brisca --restart unless-stopped -p 8089:8089 ${{ secrets.DOCKERHUB_USERNAME }}/azar-brisca:latest
+            docker run -d \
+              --name azar-brisca \
+              --restart unless-stopped \
+              -p 8089:8089 \
+              -e WALLET_SERVICE_URL="${{ secrets.WALLET_SERVICE_URL }}" \
+              -e INTERNAL_API_KEY="${{ secrets.INTERNAL_API_KEY }}" \
+              ${{ secrets.DOCKERHUB_USERNAME }}/azar-brisca:latest

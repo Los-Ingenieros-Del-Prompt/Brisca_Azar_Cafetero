@@ -1,9 +1,12 @@
 package com.aguardientes.azarcafetero.application.dto;
 
+import java.math.BigDecimal;
+
 public record CreateGameCommand(
         String gameId,
         int minPlayers,
-        int maxPlayers
+        int maxPlayers,
+        BigDecimal betAmount
 ) {
     public CreateGameCommand {
         if (gameId == null || gameId.isBlank()) {
@@ -17,6 +20,9 @@ public record CreateGameCommand(
         }
         if (minPlayers > maxPlayers) {
             throw new IllegalArgumentException("Min players cannot exceed max players");
+        }
+        if (betAmount == null || betAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Bet amount must be greater than 0");
         }
     }
 }
