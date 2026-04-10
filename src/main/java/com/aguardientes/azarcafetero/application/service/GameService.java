@@ -119,7 +119,7 @@ public class GameService implements
             resolveTrick(game);
         }
 
-        eventPublisher.publishGameStateUpdated(gameMapper.toPublicGameStateDTO(game));
+        eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
 
         return gameMapper.toGameStateDTO(game, command.playerId());
     }
