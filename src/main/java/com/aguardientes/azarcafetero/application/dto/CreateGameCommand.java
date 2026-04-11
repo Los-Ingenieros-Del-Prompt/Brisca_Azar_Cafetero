@@ -22,7 +22,7 @@ public record CreateGameCommand(
             throw new IllegalArgumentException("Min players cannot exceed max players");
         }
         if (betAmount == null || betAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            betAmount = BigDecimal.valueOf(100); // apuesta por defecto
+            throw new IllegalArgumentException("Bet amount must be greater than 0");
         }
     }
 }
