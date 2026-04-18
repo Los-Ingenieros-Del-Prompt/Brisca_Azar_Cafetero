@@ -37,8 +37,8 @@ jobs:
             docker rm azar-brisca || true
             docker run -d \
               --name azar-brisca \
-              --restart unless-stopped \
-              -p 8089:8089 \
+              --network host \
               -e WALLET_SERVICE_URL="${{ secrets.WALLET_SERVICE_URL }}" \
               -e INTERNAL_API_KEY="${{ secrets.INTERNAL_API_KEY }}" \
+              --restart unless-stopped \
               ${{ secrets.DOCKERHUB_USERNAME }}/azar-brisca:latest
