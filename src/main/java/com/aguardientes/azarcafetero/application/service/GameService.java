@@ -6,9 +6,8 @@ import com.aguardientes.azarcafetero.application.port.output.GameEventPublisher;
 import com.aguardientes.azarcafetero.application.port.output.GameRepository;
 import com.aguardientes.azarcafetero.application.port.output.WalletClient;
 import com.aguardientes.azarcafetero.domain.exception.GameNotFoundException;
-import com.aguardientes.azarcafetero.domain.model.Card;
-import com.aguardientes.azarcafetero.domain.model.Game;
-import com.aguardientes.azarcafetero.domain.model.Player;
+import com.aguardientes.azarcafetero.domain.model.*;
+import com.aguardientes.azarcafetero.domain.service.BriscaBotDecisionService;
 import com.aguardientes.azarcafetero.domain.service.GameRules;
 import com.aguardientes.azarcafetero.domain.service.ScoreCalculator;
 import com.aguardientes.azarcafetero.domain.service.TrickResolver;
@@ -30,7 +29,9 @@ public class GameService implements
     private final ScoreCalculator scoreCalculator;
     private final GameMapper gameMapper;
     private final WalletClient walletClient;
+    private final BriscaBotDecisionService botDecisionService;
 
+    // Constructor existente + bot service
     public GameService(
             GameRepository gameRepository,
             GameEventPublisher eventPublisher,
@@ -38,15 +39,19 @@ public class GameService implements
             TrickResolver trickResolver,
             ScoreCalculator scoreCalculator,
             GameMapper gameMapper,
-            WalletClient walletClient) {
-        this.gameRepository = gameRepository;
-        this.eventPublisher = eventPublisher;
-        this.gameRules = gameRules;
-        this.trickResolver = trickResolver;
-        this.scoreCalculator = scoreCalculator;
-        this.gameMapper = gameMapper;
-        this.walletClient = walletClient;
+            WalletClient walletClient,
+            BriscaBotDecisionService botDecisionService) {
+        this.gameRepository      = gameRepository;
+        this.eventPublisher      = eventPublisher;
+        this.gameRules           = gameRules;
+        this.trickResolver       = trickResolver;
+        this.scoreCalculator     = scoreCalculator;
+        this.gameMapper          = gameMapper;
+        this.walletClient        = walletClient;
+        this.botDecisionService  = botDecisionService;
     }
+
+    // ─── Métodos sin cambios ──────────────────────────────────────────────────
 
     @Override
     public GameStateDTO createGame(CreateGameCommand command) {
@@ -81,23 +86,48 @@ public class GameService implements
         }
     }
 
+    // ─── NUEVO: agregar bot ───────────────────────────────────────────────────
+
+    /**
+     * Une un bot a la partida con el ID generado y un nombre acorde a su dificultad.
+     * No llama al WalletClient (los bots no tienen saldo real).
+     */
+    public GameStateDTO addBot(AddBotCommand command) {
+        Game game = findGameOrThrow(command.gameId());
+        synchronized (game) {
+            String botId   = AddBotCommand.generateBotId(command.difficulty());
+            String botName = "Bot " + capitalize(command.difficulty().name());
+            Player bot     = new Player(botId, botName);
+            game.addPlayer(bot);
+            gameRepository.save(game);
+            eventPublisher.publishPlayerJoined(game.getId(), botId);
+            eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
+            return gameMapper.toFullGameStateDTO(game);
+        }
+    }
+
+    // ─── startGame: sin cambios relevantes ───────────────────────────────────
+
     @Override
     public GameStateDTO startGame(StartGameCommand command) {
         Game game = findGameOrThrow(command.gameId());
-        if (game.getState() != com.aguardientes.azarcafetero.domain.model.GameState.WAITING_FOR_PLAYERS) {
+        if (game.getState() != GameState.WAITING_FOR_PLAYERS) {
             return gameMapper.toFullGameStateDTO(game);
         }
         gameRules.validateGameStart(game);
-
-        // Descontar apuesta a cada jugador antes de iniciar
-        deductBetsFromAllPlayers(game);
-
+        deductBetsFromHumanPlayers(game);   // Solo descuenta a humanos
         game.start();
         gameRepository.save(game);
         eventPublisher.publishGameStarted(game.getId());
         eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
+
+        // Si el primer turno es de un bot, lo disparamos automáticamente
+        triggerBotTurnIfNeeded(game);
+
         return gameMapper.toFullGameStateDTO(game);
     }
+
+    // ─── playCard: + auto-play del bot tras cada jugada ───────────────────────
 
     @Override
     public GameStateDTO playCard(PlayCardCommand command) {
@@ -105,15 +135,64 @@ public class GameService implements
         Card card = new Card(command.suit(), command.rank());
         gameRules.validatePlayerTurn(game, command.playerId());
         gameRules.validateCardPlay(game, command.playerId(), card);
+
         game.playCard(command.playerId(), card);
         gameRepository.save(game);
         eventPublisher.publishCardPlayed(game.getId(), command.playerId(), card.toString());
+
         if (game.isTrickComplete()) {
             resolveTrick(game);
         }
+
         eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
+
+        // Si el siguiente turno es de un bot, lo jugamos automáticamente
+        triggerBotTurnIfNeeded(game);
+
         return gameMapper.toGameStateDTO(game, command.playerId());
     }
+
+    // ─── Bot auto-play ────────────────────────────────────────────────────────
+
+    /**
+     * Si el jugador activo es un bot, juega su turno.
+     * Se llama de forma recursiva hasta que le toque a un humano o termine la partida.
+     *
+     * Límite de seguridad: máximo tantos turnos consecutivos como jugadores hay
+     * (evita loops infinitos si todos son bots y algo falla).
+     */
+    private void triggerBotTurnIfNeeded(Game game) {
+        int maxConsecutiveBotTurns = game.getPlayers().size();
+        int turns = 0;
+
+        while (turns < maxConsecutiveBotTurns
+                && game.getState() == GameState.IN_PROGRESS) {
+
+            Player currentPlayer = game.getCurrentPlayer();
+            if (currentPlayer == null) break;
+            if (!AddBotCommand.isBot(currentPlayer.getId())) break;
+
+            playBotTurn(game, currentPlayer.getId());
+            turns++;
+        }
+    }
+
+    private void playBotTurn(Game game, String botId) {
+        BotDifficulty difficulty = AddBotCommand.difficultyFromId(botId);
+        Card card = botDecisionService.decide(game, botId, difficulty);
+
+        game.playCard(botId, card);
+        gameRepository.save(game);
+        eventPublisher.publishCardPlayed(game.getId(), botId, card.toString());
+
+        if (game.isTrickComplete()) {
+            resolveTrick(game);
+        }
+
+        eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
+    }
+
+    // ─── resolveTrick: igual que antes ───────────────────────────────────────
 
     private void resolveTrick(Game game) {
         String winnerId = trickResolver.determineWinner(
@@ -126,33 +205,44 @@ public class GameService implements
         if (game.isGameOver()) {
             game.finish();
             gameRepository.save(game);
-            Player winner = game.getWinner();
-            String winnerUserId = winner != null ? winner.getId() : null;
-            if (winnerUserId != null) {
-                settlePrize(game, winnerUserId);
+            Player winner    = game.getWinner();
+            String winnnerUserId = winner != null ? winner.getId() : null;
+            if (winnnerUserId != null) {
+                settlePrize(game, winnnerUserId);
             }
-            eventPublisher.publishGameFinished(game.getId(), winnerUserId);
+            eventPublisher.publishGameFinished(game.getId(), winnnerUserId);
         }
     }
 
+    // ─── Wallet: solo opera con jugadores humanos ─────────────────────────────
+
     private void settlePrize(Game game, String winnerUserId) {
-        List<Player> players = game.getPlayers();
-        BigDecimal betAmount = game.getBetAmount();
-        BigDecimal totalPrize = betAmount.multiply(BigDecimal.valueOf(players.size()));
+        if (AddBotCommand.isBot(winnerUserId)) return; // bot ganó, nadie cobra
+
+        List<Player> players  = game.getPlayers();
+        BigDecimal betAmount  = game.getBetAmount();
+        // Premio reducido al 50% si había bots en la partida (PBI 158)
+        boolean hasBot        = players.stream().anyMatch(p -> AddBotCommand.isBot(p.getId()));
+        BigDecimal multiplier = hasBot ? new BigDecimal("0.5") : BigDecimal.ONE;
+        BigDecimal totalPrize = betAmount.multiply(BigDecimal.valueOf(players.size()))
+                .multiply(multiplier);
 
         walletClient.receiveWin(winnerUserId, totalPrize);
 
         players.stream()
                 .filter(p -> !p.getId().equals(winnerUserId))
+                .filter(p -> !AddBotCommand.isBot(p.getId()))   // bots no registran pérdida
                 .forEach(loser -> walletClient.registerLoss(loser.getId(), betAmount));
     }
 
-    private void deductBetsFromAllPlayers(Game game) {
+    private void deductBetsFromHumanPlayers(Game game) {
         BigDecimal betAmount = game.getBetAmount();
-        for (Player player : game.getPlayers()) {
-            walletClient.placeBet(player.getId(), betAmount);
-        }
+        game.getPlayers().stream()
+                .filter(p -> !AddBotCommand.isBot(p.getId()))
+                .forEach(p -> walletClient.placeBet(p.getId(), betAmount));
     }
+
+    // ─── getGameState: sin cambios ────────────────────────────────────────────
 
     @Override
     public GameStateDTO getGameState(String gameId) {
@@ -169,8 +259,15 @@ public class GameService implements
         return gameMapper.toFullGameStateDTO(findGameOrThrow(gameId));
     }
 
+    // ─── helpers ─────────────────────────────────────────────────────────────
+
     private Game findGameOrThrow(String gameId) {
         return gameRepository.findById(gameId)
                 .orElseThrow(() -> new GameNotFoundException(gameId));
+    }
+
+    private String capitalize(String s) {
+        if (s == null || s.isEmpty()) return s;
+        return s.charAt(0) + s.substring(1).toLowerCase();
     }
 }

@@ -5,6 +5,7 @@ import com.aguardientes.azarcafetero.application.port.output.GameRepository;
 import com.aguardientes.azarcafetero.application.port.output.WalletClient;
 import com.aguardientes.azarcafetero.application.service.GameMapper;
 import com.aguardientes.azarcafetero.application.service.GameService;
+import com.aguardientes.azarcafetero.domain.service.BriscaBotDecisionService;
 import com.aguardientes.azarcafetero.domain.service.GameRules;
 import com.aguardientes.azarcafetero.domain.service.ScoreCalculator;
 import com.aguardientes.azarcafetero.domain.service.TrickResolver;
@@ -28,6 +29,12 @@ public class BriscaApplicationConfig {
     @Bean
     public GameMapper gameMapper() { return new GameMapper(); }
 
+    // Nuevo bean del servicio de decisión del bot
+    @Bean
+    public BriscaBotDecisionService briscaBotDecisionService() {
+        return new BriscaBotDecisionService();
+    }
+
     @Bean
     public WalletClient walletClient(
             @Value("${wallet.service.url}") String walletServiceUrl,
@@ -43,7 +50,8 @@ public class BriscaApplicationConfig {
             TrickResolver trickResolver,
             ScoreCalculator scoreCalculator,
             GameMapper gameMapper,
-            WalletClient walletClient) {
+            WalletClient walletClient,
+            BriscaBotDecisionService botDecisionService) {
         return new GameService(
                 gameRepository,
                 eventPublisher,
@@ -51,7 +59,8 @@ public class BriscaApplicationConfig {
                 trickResolver,
                 scoreCalculator,
                 gameMapper,
-                walletClient
+                walletClient,
+                botDecisionService
         );
     }
 }
