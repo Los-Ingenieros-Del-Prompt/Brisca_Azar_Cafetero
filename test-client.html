@@ -1,276 +1,304 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Brisca WebSocket Test</title>
+    <title>Brisca Bot - Test Client</title>
     <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 1200px;
-            margin: 20px auto;
-            padding: 20px;
-            background: #f5f5f5;
-        }
-        .container {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-        }
-        button {
-            background: #4CAF50;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            margin: 5px;
-            cursor: pointer;
-            border-radius: 4px;
-        }
-        button:hover {
-            background: #45a049;
-        }
-        button:disabled {
-            background: #cccccc;
-            cursor: not-allowed;
-        }
-        #log {
-            background: #1e1e1e;
-            color: #d4d4d4;
-            padding: 15px;
-            border-radius: 4px;
-            height: 400px;
-            overflow-y: auto;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-        }
-        .success { color: #4CAF50; }
-        .error { color: #f44336; }
-        .info { color: #2196F3; }
-        .event { color: #FF9800; }
-        input {
-            padding: 8px;
-            margin: 5px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        .status {
-            display: inline-block;
-            padding: 5px 10px;
-            border-radius: 4px;
-            font-weight: bold;
-            margin-left: 10px;
-        }
-        .status.connected {
-            background: #4CAF50;
-            color: white;
-        }
-        .status.disconnected {
-            background: #f44336;
-            color: white;
-        }
+        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 20px auto; padding: 20px; background: #1a1a2e; color: #eee; }
+        h1 { color: #e94560; }
+        h2 { color: #0f3460; background: #16213e; padding: 8px 12px; border-radius: 6px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .panel { background: #16213e; border-radius: 10px; padding: 16px; }
+        .panel.bot { border: 2px solid #e94560; }
+        button { background: #0f3460; color: white; border: none; padding: 10px 16px; margin: 4px; cursor: pointer; border-radius: 6px; font-size: 13px; }
+        button:hover { background: #e94560; }
+        button:disabled { background: #333; cursor: not-allowed; }
+        button.danger { background: #c0392b; }
+        input, select { background: #0f3460; color: white; border: 1px solid #e94560; padding: 8px; margin: 4px; border-radius: 6px; width: calc(100% - 20px); }
+        #log { background: #0d0d0d; color: #00ff88; padding: 12px; border-radius: 6px; height: 350px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+        .status { display: inline-block; padding: 4px 10px; border-radius: 4px; font-weight: bold; }
+        .connected { background: #27ae60; }
+        .disconnected { background: #c0392b; }
+        .tag { background: #e94560; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-left: 6px; }
+        .card-info { background: #0f3460; padding: 6px; border-radius: 4px; margin: 2px 0; font-size: 12px; }
     </style>
 </head>
 <body>
-    <h1>Brisca WebSocket Test Client</h1>
-    
-    <div class="container">
-        <h2>Connection Status: <span id="status" class="status disconnected">Disconnected</span></h2>
-        <button id="connectBtn" onclick="connect()">Connect</button>
-        <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+<h1>🃏 Brisca Bot — Cliente de Prueba</h1>
+<p>Estado: <span id="status" class="status disconnected">Desconectado</span></p>
+
+<div class="grid">
+
+    <!-- Conexión -->
+    <div class="panel">
+        <h2>1. Conexión</h2>
+        <input type="text" id="serverUrl" value="http://localhost:8089/ws" placeholder="URL del servidor">
+        <br>
+        <button id="btnConnect" onclick="connect()">Conectar</button>
+        <button id="btnDisconnect" onclick="disconnect()" disabled>Desconectar</button>
     </div>
 
-    <div class="container">
-        <h2>Game Actions</h2>
-        <div>
-            <input type="text" id="gameId" placeholder="Game ID (e.g., GAME_123)" value="TEST_GAME">
-            <button onclick="createGame()" id="createBtn" disabled>Create Game</button>
-        </div>
-        <div>
-            <input type="text" id="playerId" placeholder="Player ID" value="PLAYER_1">
-            <input type="text" id="playerName" placeholder="Player Name" value="Alice">
-            <button onclick="joinGame()" id="joinBtn" disabled>Join Game</button>
-        </div>
-        <div>
-            <button onclick="startGame()" id="startBtn" disabled>Start Game</button>
-            <button onclick="getGameState()" id="stateBtn" disabled>Get Game State</button>
-        </div>
-        <div>
-            <select id="suitSelect">
-                <option value="OROS">Oros (Gold)</option>
-                <option value="COPAS">Copas (Cups)</option>
-                <option value="ESPADAS">Espadas (Swords)</option>
-                <option value="BASTOS">Bastos (Clubs)</option>
-            </select>
-            <select id="rankSelect">
-                <option value="ACE">As (1) - 11pts</option>
-                <option value="TWO">2 - 0pts</option>
-                <option value="THREE">3 - 10pts</option>
-                <option value="FOUR">4 - 0pts</option>
-                <option value="FIVE">5 - 0pts</option>
-                <option value="SIX">6 - 0pts</option>
-                <option value="SEVEN">7 - 0pts</option>
-                <option value="JACK">Sota (10) - 2pts</option>
-                <option value="HORSE">Caballo (11) - 3pts</option>
-                <option value="KING">Rey (12) - 4pts</option>
-            </select>
-            <button onclick="playCard()" id="playBtn" disabled>Play Card</button>
-        </div>
+    <!-- Crear partida -->
+    <div class="panel">
+        <h2>2. Crear Partida</h2>
+        <input type="text" id="gameId" value="BRISCA_TEST_1" placeholder="Game ID">
+        <input type="number" id="betAmount" value="10" placeholder="Apuesta">
+        <br>
+        <button id="btnCreate" onclick="createGame()" disabled>Crear Partida</button>
     </div>
 
-    <div class="container">
-        <h2>Console Log</h2>
-        <button onclick="clearLog()">Clear Log</button>
-        <div id="log"></div>
+    <!-- Jugador humano -->
+    <div class="panel">
+        <h2>3. Unirse como Humano</h2>
+        <input type="text" id="playerId" value="PLAYER_HUMAN_1" placeholder="Player ID">
+        <input type="text" id="playerName" value="Juan" placeholder="Nombre">
+        <br>
+        <button id="btnJoin" onclick="joinGame()" disabled>Unirse</button>
+        <button id="btnStart" onclick="startGame()" disabled>Iniciar Partida</button>
     </div>
 
-    <script>
-        let stompClient = null;
-        const WEBSOCKET_URL = 'http://localhost:8089/ws';
+    <!-- BOT - panel destacado -->
+    <div class="panel bot">
+        <h2>🤖 Agregar Bot <span class="tag">NUEVO</span></h2>
+        <label>Dificultad:</label>
+        <select id="botDifficulty">
+            <option value="EASY">Fácil — jugadas aleatorias</option>
+            <option value="MEDIUM" selected>Medio — estrategia básica</option>
+            <option value="HARD">Difícil — maximiza puntos</option>
+        </select>
+        <br>
+        <button id="btnAddBot" onclick="addBot()" disabled style="background:#e94560">
+            🤖 Agregar Bot
+        </button>
+        <p style="font-size:11px;color:#aaa">
+            El bot jugará automáticamente cuando sea su turno.<br>
+            ID generado: <code id="lastBotId">—</code>
+        </p>
+    </div>
 
-        function log(message, type = 'info') {
-            const logDiv = document.getElementById('log');
-            const time = new Date().toLocaleTimeString();
-            const className = type;
-            logDiv.innerHTML += `<div class="${className}">[${time}] ${message}</div>`;
-            logDiv.scrollTop = logDiv.scrollHeight;
-        }
+    <!-- Jugar carta -->
+    <div class="panel">
+        <h2>4. Jugar Carta</h2>
+        <select id="suit">
+            <option value="OROS">Oros ⭕</option>
+            <option value="COPAS">Copas 🏆</option>
+            <option value="ESPADAS">Espadas ⚔️</option>
+            <option value="BASTOS">Bastos 🪵</option>
+        </select>
+        <select id="rank">
+            <option value="ACE">As (11pts)</option>
+            <option value="THREE">3 (10pts)</option>
+            <option value="KING">Rey (4pts)</option>
+            <option value="HORSE">Caballo (3pts)</option>
+            <option value="JACK">Sota (2pts)</option>
+            <option value="SEVEN">7 (0pts)</option>
+            <option value="SIX">6 (0pts)</option>
+            <option value="FIVE">5 (0pts)</option>
+            <option value="FOUR">4 (0pts)</option>
+            <option value="TWO">2 (0pts)</option>
+        </select>
+        <br>
+        <button id="btnPlay" onclick="playCard()" disabled>Jugar Carta</button>
+        <button onclick="getState()">Ver Estado</button>
+    </div>
 
-        function clearLog() {
-            document.getElementById('log').innerHTML = '';
-        }
+    <!-- Estado actual -->
+    <div class="panel">
+        <h2>Estado de la Partida</h2>
+        <div id="gameState" style="font-size:12px;">Sin datos aún</div>
+    </div>
 
-        function setConnected(connected) {
-            document.getElementById('connectBtn').disabled = connected;
-            document.getElementById('disconnectBtn').disabled = !connected;
-            document.getElementById('createBtn').disabled = !connected;
-            document.getElementById('joinBtn').disabled = !connected;
-            document.getElementById('startBtn').disabled = !connected;
-            document.getElementById('stateBtn').disabled = !connected;
-            document.getElementById('playBtn').disabled = !connected;
-            
-            const statusElement = document.getElementById('status');
-            if (connected) {
-                statusElement.textContent = 'Connected';
-                statusElement.className = 'status connected';
-            } else {
-                statusElement.textContent = 'Disconnected';
-                statusElement.className = 'status disconnected';
-            }
-        }
+</div>
 
-        function connect() {
-            const socket = new SockJS(WEBSOCKET_URL);
-            stompClient = Stomp.over(socket);
-            
-            log('Connecting to ' + WEBSOCKET_URL + '...', 'info');
-            
-            stompClient.connect({}, function(frame) {
-                log('✅ Connected successfully!', 'success');
-                setConnected(true);
-                
-                // Subscribe to lobby
-                stompClient.subscribe('/topic/lobby', function(message) {
-                    log('📢 LOBBY: ' + message.body, 'event');
-                });
-                
-                // Subscribe to game updates
-                const gameId = document.getElementById('gameId').value;
-                stompClient.subscribe('/topic/game/' + gameId, function(message) {
-                    log('🎮 GAME STATE: ' + message.body, 'success');
-                    try {
-                        const state = JSON.parse(message.body);
-                        log('Current turn: ' + state.currentPlayerId, 'info');
-                        log('Game state: ' + state.state, 'info');
-                    } catch (e) {}
-                });
-                
-                // Subscribe to game events
-                stompClient.subscribe('/topic/game/' + gameId + '/events', function(message) {
-                    log('⚡ EVENT: ' + message.body, 'event');
-                });
-                
-            }, function(error) {
-                log('❌ Connection error: ' + error, 'error');
-                setConnected(false);
+<br>
+<div class="panel">
+    <h2>📋 Log</h2>
+    <button class="danger" onclick="clearLog()">Limpiar</button>
+    <div id="log"></div>
+</div>
+
+<script>
+    let client = null;
+    let connected = false;
+
+    // ── Conexión ───────────────────────────────────────────────────────────
+
+    function connect() {
+        const url = document.getElementById('serverUrl').value;
+        log('Conectando a ' + url + '...');
+
+        const socket = new SockJS(url);
+        client = Stomp.over(socket);
+        client.debug = () => {};
+
+        client.connect({}, frame => {
+            connected = true;
+            setStatus(true);
+            enableButtons(true);
+            log('✅ Conectado');
+
+            const gameId = document.getElementById('gameId').value;
+            subscribeToGame(gameId);
+
+        }, error => {
+            connected = false;
+            setStatus(false);
+            enableButtons(false);
+            log('❌ Error de conexión: ' + error);
+        });
+    }
+
+    function disconnect() {
+        if (client) client.disconnect(() => log('Desconectado'));
+        connected = false;
+        setStatus(false);
+        enableButtons(false);
+    }
+
+    function subscribeToGame(gameId) {
+        // Estado del juego
+        client.subscribe('/topic/game/' + gameId, msg => {
+            const state = JSON.parse(msg.body);
+            updateGameState(state);
+            log('📦 Estado recibido — turno: ' + (state.currentPlayerId || 'N/A') + ' | estado: ' + state.state);
+        });
+
+        // Eventos (baza ganada, partida terminada, etc.)
+        client.subscribe('/topic/game/' + gameId + '/events', msg => {
+            const event = JSON.parse(msg.body);
+            log('⚡ Evento: ' + event.type + ' → ' + JSON.stringify(event.data));
+        });
+
+        log('📡 Suscrito a /topic/game/' + gameId);
+    }
+
+    // ── Acciones ──────────────────────────────────────────────────────────
+
+    function createGame() {
+        const gameId = val('gameId');
+        const bet    = parseFloat(val('betAmount'));
+        send('/app/game/create', { gameId, minPlayers: 2, maxPlayers: 2, betAmount: bet });
+        log('📝 Partida creada: ' + gameId);
+
+        // Re-suscribirse por si cambió el gameId
+        subscribeToGame(gameId);
+    }
+
+    function joinGame() {
+        send('/app/game/' + val('gameId') + '/join', {
+            gameId:     val('gameId'),
+            playerId:   val('playerId'),
+            playerName: val('playerName')
+        });
+        log('👤 Uniéndose como ' + val('playerName'));
+    }
+
+    function addBot() {
+        const difficulty = val('botDifficulty');
+        const gameId     = val('gameId');
+
+        send('/app/game/' + gameId + '/addBot', { difficulty });
+        log('🤖 Bot agregado con dificultad: ' + difficulty);
+
+        // El ID real lo veremos cuando llegue el estado actualizado
+        document.getElementById('lastBotId').textContent = 'BOT_' + difficulty + '_xxxxxxxx (ver log)';
+    }
+
+    function startGame() {
+        send('/app/game/' + val('gameId') + '/start', { gameId: val('gameId') });
+        log('🎮 Iniciando partida...');
+    }
+
+    function playCard() {
+        send('/app/game/' + val('gameId') + '/play', {
+            gameId:   val('gameId'),
+            playerId: val('playerId'),
+            suit:     val('suit'),
+            rank:     val('rank')
+        });
+        log('🃏 Jugando: ' + val('rank') + ' de ' + val('suit'));
+    }
+
+    function getState() {
+        send('/app/game/' + val('gameId') + '/state', {});
+    }
+
+    // ── Display ───────────────────────────────────────────────────────────
+
+    function updateGameState(state) {
+        const el = document.getElementById('gameState');
+        const botPlayers = (state.players || []).filter(p => p.id && p.id.startsWith('BOT_'));
+        const humanPlayers = (state.players || []).filter(p => p.id && !p.id.startsWith('BOT_'));
+
+        let html = '<b>Estado:</b> ' + state.state + '<br>';
+        html += '<b>Turno de:</b> ' + (state.currentPlayerId || '—') + '<br>';
+        html += '<b>Triunfo:</b> ' + (state.trumpCard ? state.trumpCard.rank + ' de ' + state.trumpCard.suit : '—') + '<br>';
+        html += '<b>Cartas en mazo:</b> ' + state.remainingCards + '<br><br>';
+
+        if (humanPlayers.length > 0) {
+            html += '<b>👤 Humanos:</b><br>';
+            humanPlayers.forEach(p => {
+                html += '&nbsp;&nbsp;' + p.name + ' — ' + p.score + ' pts';
+                if (p.hand && p.hand.length > 0) {
+                    html += ' | Mano: ' + p.hand.map(c => c.rank + '/' + c.suit).join(', ');
+                }
+                html += '<br>';
             });
         }
 
-        function disconnect() {
-            if (stompClient !== null) {
-                stompClient.disconnect();
-                log('Disconnected', 'info');
-            }
-            setConnected(false);
+        if (botPlayers.length > 0) {
+            html += '<br><b>🤖 Bots:</b><br>';
+            botPlayers.forEach(p => {
+                document.getElementById('lastBotId').textContent = p.id;
+                html += '&nbsp;&nbsp;' + p.name + ' (' + p.id + ') — ' + p.score + ' pts<br>';
+            });
         }
 
-        function createGame() {
-            const gameId = document.getElementById('gameId').value;
-            const message = {
-                gameId: gameId,
-                minPlayers: 2,
-                maxPlayers: 4
-            };
-            
-            log('Creating game: ' + gameId, 'info');
-            stompClient.send('/app/game/create', {}, JSON.stringify(message));
+        if (state.currentTrick && Object.keys(state.currentTrick.playedCards || {}).length > 0) {
+            html += '<br><b>Baza actual:</b><br>';
+            Object.entries(state.currentTrick.playedCards).forEach(([pid, card]) => {
+                html += '&nbsp;&nbsp;' + pid.substring(0, 12) + '… → ' + card.rank + ' de ' + card.suit + '<br>';
+            });
         }
 
-        function joinGame() {
-            const gameId = document.getElementById('gameId').value;
-            const playerId = document.getElementById('playerId').value;
-            const playerName = document.getElementById('playerName').value;
-            
-            const message = {
-                gameId: gameId,
-                playerId: playerId,
-                playerName: playerName
-            };
-            
-            log('Joining game as ' + playerName + ' (' + playerId + ')', 'info');
-            stompClient.send('/app/game/' + gameId + '/join', {}, JSON.stringify(message));
+        if (state.state === 'FINISHED' && state.winner) {
+            html += '<br>🏆 <b>GANADOR: ' + state.winner.name + '</b>';
         }
 
-        function startGame() {
-            const gameId = document.getElementById('gameId').value;
-            const message = {
-                gameId: gameId
-            };
-            
-            log('Starting game: ' + gameId, 'info');
-            stompClient.send('/app/game/' + gameId + '/start', {}, JSON.stringify(message));
-        }
+        el.innerHTML = html;
+    }
 
-        function playCard() {
-            const gameId = document.getElementById('gameId').value;
-            const playerId = document.getElementById('playerId').value;
-            const suit = document.getElementById('suitSelect').value;
-            const rank = document.getElementById('rankSelect').value;
-            
-            const message = {
-                gameId: gameId,
-                playerId: playerId,
-                suit: suit,
-                rank: rank
-            };
-            
-            log('Playing card: ' + rank + ' of ' + suit, 'info');
-            stompClient.send('/app/game/' + gameId + '/play', {}, JSON.stringify(message));
-        }
+    // ── Helpers ───────────────────────────────────────────────────────────
 
-        function getGameState() {
-            const gameId = document.getElementById('gameId').value;
-            log('Requesting game state...', 'info');
-            stompClient.send('/app/game/' + gameId + '/state', {}, JSON.stringify({}));
-        }
+    function send(destination, body) {
+        if (!client || !connected) { log('❌ No conectado'); return; }
+        client.send(destination, {}, JSON.stringify(body));
+    }
 
-        // Auto-connect on page load
-        window.onload = function() {
-            log('Page loaded. Click Connect to start.', 'info');
-        };
-    </script>
+    function val(id) { return document.getElementById(id).value; }
+
+    function log(msg) {
+        const el = document.getElementById('log');
+        const time = new Date().toLocaleTimeString();
+        el.innerHTML += '<div>[' + time + '] ' + msg + '</div>';
+        el.scrollTop = el.scrollHeight;
+    }
+
+    function clearLog() { document.getElementById('log').innerHTML = ''; }
+
+    function setStatus(isConnected) {
+        const el = document.getElementById('status');
+        el.textContent = isConnected ? 'Conectado' : 'Desconectado';
+        el.className = 'status ' + (isConnected ? 'connected' : 'disconnected');
+    }
+
+    function enableButtons(isConnected) {
+        ['btnDisconnect','btnCreate','btnJoin','btnStart','btnAddBot','btnPlay']
+            .forEach(id => document.getElementById(id).disabled = !isConnected);
+        document.getElementById('btnConnect').disabled = isConnected;
+    }
+</script>
 </body>
 </html>
