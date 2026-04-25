@@ -31,7 +31,18 @@ public class GameService implements
     private final WalletClient walletClient;
     private final BriscaBotDecisionService botDecisionService;
 
-    // Constructor existente + bot service
+    /**
+     * Executor de un solo hilo para turnos de bot.
+     * Un solo hilo garantiza que los turnos se procesen en orden
+     * sin concurrencia ni bloqueo del handler de WebSocket.
+     */
+    private final java.util.concurrent.ExecutorService botExecutor =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "brisca-bot-thread");
+                t.setDaemon(true);
+                return t;
+            });
+
     public GameService(
             GameRepository gameRepository,
             GameEventPublisher eventPublisher,
@@ -144,8 +155,6 @@ public class GameService implements
         return gameMapper.toGameStateDTO(game, command.playerId());
     }
 
-    // ─── Bot auto-play ────────────────────────────────────────────────────────
-
     /**
      * Si el jugador activo es un bot, juega su turno.
      * Se llama de forma recursiva hasta que le toque a un humano o termine la partida.
@@ -153,24 +162,40 @@ public class GameService implements
      * Límite de seguridad: máximo tantos turnos consecutivos como jugadores hay
      * (evita loops infinitos si todos son bots y algo falla).
      */
-    /**
-     * Delay en ms antes de que el bot juegue su carta.
-     * Permite que el frontend renderice el estado intermedio.
-     */
     private static final long BOT_PLAY_DELAY_MS = 800;
 
+    /**
+     * Programa el turno del bot en el executor de un solo hilo.
+     * Retorna inmediatamente para no bloquear el handler de WebSocket.
+     * El executor garantiza que los turnos se ejecutan en orden, uno a la vez.
+     */
     private void triggerBotTurnIfNeeded(Game game) {
-        int maxConsecutiveBotTurns = game.getPlayers().size();
+        Player currentPlayer = game.getCurrentPlayer();
+        if (currentPlayer == null) return;
+        if (!AddBotCommand.isBot(currentPlayer.getId())) return;
+
+        String gameId = game.getId();
+        botExecutor.submit(() -> runBotTurns(gameId));
+    }
+
+    /**
+     * Ejecuta todos los turnos consecutivos de bots en el hilo del executor.
+     * Re-lee el estado del juego desde el repositorio para evitar estado obsoleto.
+     */
+    private void runBotTurns(String gameId) {
+        int maxTurns = 10; // límite de seguridad
         int turns = 0;
 
-        while (turns < maxConsecutiveBotTurns
-                && game.getState() == GameState.IN_PROGRESS) {
+        while (turns < maxTurns) {
+            // Re-leer el juego desde el repositorio en cada iteración
+            Game game = gameRepository.findById(gameId).orElse(null);
+            if (game == null || game.getState() != GameState.IN_PROGRESS) break;
 
             Player currentPlayer = game.getCurrentPlayer();
             if (currentPlayer == null) break;
             if (!AddBotCommand.isBot(currentPlayer.getId())) break;
 
-            // FIX Bug 2: si el bot no tiene cartas y el mazo está vacío, terminar la partida
+            // Si el bot no tiene cartas verificar si la partida terminó
             if (!currentPlayer.hasCards()) {
                 if (game.isGameOver()) {
                     game.finish();
@@ -190,7 +215,7 @@ public class GameService implements
     }
 
     private void playBotTurn(Game game, String botId) {
-        // 1. Publica estado ANTES de jugar → frontend muestra carta del humano en mesa
+        // Publica estado ANTES de jugar: frontend ve la carta del humano en mesa
         eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
 
         sleep(BOT_PLAY_DELAY_MS);
@@ -202,16 +227,14 @@ public class GameService implements
         gameRepository.save(game);
         eventPublisher.publishCardPlayed(game.getId(), botId, card.toString());
 
-        // FIX Bug 1: publica estado CON la carta del bot visible ANTES de resolver la baza
+        // Publica estado CON la carta del bot visible antes de resolver
         eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
 
         if (game.isTrickComplete()) {
-            // Pausa para que el frontend muestre la carta del último bot antes de limpiar la baza
             sleep(BOT_PLAY_DELAY_MS);
             resolveTrick(game);
+            eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
         }
-
-        eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
     }
 
     private void sleep(long ms) {
