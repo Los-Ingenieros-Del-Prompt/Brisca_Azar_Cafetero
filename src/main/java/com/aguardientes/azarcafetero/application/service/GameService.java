@@ -121,8 +121,6 @@ public class GameService implements
         return gameMapper.toFullGameStateDTO(game);
     }
 
-    // ─── playCard: + auto-play del bot tras cada jugada ───────────────────────
-
     @Override
     public GameStateDTO playCard(PlayCardCommand command) {
         Game game = findGameOrThrow(command.gameId());
@@ -157,8 +155,7 @@ public class GameService implements
      */
     /**
      * Delay en ms antes de que el bot juegue su carta.
-     * Permite que el frontend renderice el estado intermedio
-     * (carta del humano visible en la mesa) antes de que el bot responda.
+     * Permite que el frontend renderice el estado intermedio.
      */
     private static final long BOT_PLAY_DELAY_MS = 800;
 
@@ -173,21 +170,30 @@ public class GameService implements
             if (currentPlayer == null) break;
             if (!AddBotCommand.isBot(currentPlayer.getId())) break;
 
+            // FIX Bug 2: si el bot no tiene cartas y el mazo está vacío, terminar la partida
+            if (!currentPlayer.hasCards()) {
+                if (game.isGameOver()) {
+                    game.finish();
+                    gameRepository.save(game);
+                    Player winner = game.getWinner();
+                    String winnerUserId = winner != null ? winner.getId() : null;
+                    if (winnerUserId != null) settlePrize(game, winnerUserId);
+                    eventPublisher.publishGameFinished(game.getId(), winnerUserId);
+                    eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
+                }
+                break;
+            }
+
             playBotTurn(game, currentPlayer.getId());
             turns++;
         }
     }
 
     private void playBotTurn(Game game, String botId) {
-        // Publica el estado ANTES de jugar para que el frontend
-        // muestre la carta del humano en la mesa mientras el bot "piensa"
+        // 1. Publica estado ANTES de jugar → frontend muestra carta del humano en mesa
         eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
 
-        try {
-            Thread.sleep(BOT_PLAY_DELAY_MS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        sleep(BOT_PLAY_DELAY_MS);
 
         BotDifficulty difficulty = AddBotCommand.difficultyFromId(botId);
         Card card = botDecisionService.decide(game, botId, difficulty);
@@ -196,11 +202,24 @@ public class GameService implements
         gameRepository.save(game);
         eventPublisher.publishCardPlayed(game.getId(), botId, card.toString());
 
+        // FIX Bug 1: publica estado CON la carta del bot visible ANTES de resolver la baza
+        eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
+
         if (game.isTrickComplete()) {
+            // Pausa para que el frontend muestre la carta del último bot antes de limpiar la baza
+            sleep(BOT_PLAY_DELAY_MS);
             resolveTrick(game);
         }
 
         eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
+    }
+
+    private void sleep(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     // ─── resolveTrick: igual que antes ───────────────────────────────────────
