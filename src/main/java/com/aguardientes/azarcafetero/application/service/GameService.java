@@ -51,8 +51,6 @@ public class GameService implements
         this.botDecisionService  = botDecisionService;
     }
 
-    // ─── Métodos sin cambios ──────────────────────────────────────────────────
-
     @Override
     public GameStateDTO createGame(CreateGameCommand command) {
         Game game = gameRepository.findById(command.gameId()).orElseGet(() -> {
@@ -86,8 +84,6 @@ public class GameService implements
         }
     }
 
-    // ─── NUEVO: agregar bot ───────────────────────────────────────────────────
-
     /**
      * Une un bot a la partida con el ID generado y un nombre acorde a su dificultad.
      * No llama al WalletClient (los bots no tienen saldo real).
@@ -105,8 +101,6 @@ public class GameService implements
             return gameMapper.toFullGameStateDTO(game);
         }
     }
-
-    // ─── startGame: sin cambios relevantes ───────────────────────────────────
 
     @Override
     public GameStateDTO startGame(StartGameCommand command) {
@@ -161,6 +155,13 @@ public class GameService implements
      * Límite de seguridad: máximo tantos turnos consecutivos como jugadores hay
      * (evita loops infinitos si todos son bots y algo falla).
      */
+    /**
+     * Delay en ms antes de que el bot juegue su carta.
+     * Permite que el frontend renderice el estado intermedio
+     * (carta del humano visible en la mesa) antes de que el bot responda.
+     */
+    private static final long BOT_PLAY_DELAY_MS = 800;
+
     private void triggerBotTurnIfNeeded(Game game) {
         int maxConsecutiveBotTurns = game.getPlayers().size();
         int turns = 0;
@@ -178,6 +179,16 @@ public class GameService implements
     }
 
     private void playBotTurn(Game game, String botId) {
+        // Publica el estado ANTES de jugar para que el frontend
+        // muestre la carta del humano en la mesa mientras el bot "piensa"
+        eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
+
+        try {
+            Thread.sleep(BOT_PLAY_DELAY_MS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
         BotDifficulty difficulty = AddBotCommand.difficultyFromId(botId);
         Card card = botDecisionService.decide(game, botId, difficulty);
 
