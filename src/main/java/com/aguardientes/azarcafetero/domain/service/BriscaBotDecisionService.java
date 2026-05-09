@@ -3,22 +3,35 @@ package com.aguardientes.azarcafetero.domain.service;
 import com.aguardientes.azarcafetero.domain.model.*;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
- * Servicio de dominio que decide qué carta debe jugar el bot en cada turno.
+ * Servicio de decisión del bot de Brisca.
  *
- * Separado del motor de juego (GameService) para que la lógica sea
- * testeable en aislamiento sin infraestructura.
- *
- * Uso:
- *   Card card = botDecisionService.decide(game, botPlayerId, difficulty);
- *   gameService.playCard(new PlayCardCommand(gameId, botPlayerId, card.getSuit(), card.getRank()));
+ * ┌─────────┬──────────────────────────────────────────────────────────────┐
+ * │ EASY    │ Selección aleatoria pura. Sin estrategia.                    │
+ * ├─────────┼──────────────────────────────────────────────────────────────┤
+ * │ MEDIUM  │ Búsqueda greedy con función heurística (profundidad 1).      │
+ * │         │ Evalúa cada carta con un score y elige la de mayor valor.    │
+ * ├─────────┼──────────────────────────────────────────────────────────────┤
+ * │ HARD    │ Minimax con poda Alpha-Beta (profundidad 2).                 │
+ * │         │ Explora árbol de decisiones asumiendo que el oponente        │
+ * │         │ juega de forma óptima (minimiza la utilidad del bot).        │
+ * └─────────┴──────────────────────────────────────────────────────────────┘
  */
 public class BriscaBotDecisionService {
 
-    // Umbral de puntos en la baza para que valga la pena gastar un triunfo
-    private static final int TRUMP_WORTH_THRESHOLD = 5;
+
+    /** Profundidad del árbol Minimax para HARD. */
+    private static final int MINIMAX_DEPTH = 2;
+
+    /** Penalización por desperdiciar un triunfo sin ganar la baza. */
+    private static final double TRUMP_WASTE_PENALTY = 3.5;
+
+    /** Multiplicador de ganancia al ganar una baza. */
+    private static final double WIN_MULTIPLIER = 1.5;
+
+    /** Penalización al perder una carta de alto valor. */
+    private static final double LOSS_MULTIPLIER = 1.2;
 
     private final Random random;
 
@@ -26,229 +39,428 @@ public class BriscaBotDecisionService {
         this.random = new Random();
     }
 
-    // Constructor para tests (inyección de Random controlado)
     public BriscaBotDecisionService(Random random) {
         this.random = random;
     }
 
-    /**
-     * Punto de entrada principal.
-     *
-     * @param game       Estado actual de la partida
-     * @param botId      ID del jugador bot (debe ser el turno activo)
-     * @param difficulty Nivel de dificultad
-     * @return Carta a jugar (siempre válida, nunca null)
-     */
+
     public Card decide(Game game, String botId, BotDifficulty difficulty) {
         Player bot = game.getPlayerById(botId);
-        if (bot == null) {
-            throw new IllegalArgumentException("Bot player not found: " + botId);
-        }
+        if (bot == null) throw new IllegalArgumentException("Bot not found: " + botId);
 
-        List<Card> hand = bot.getHand();
-        if (hand.isEmpty()) {
-            throw new IllegalStateException("Bot has no cards to play");
-        }
-
-        // Con una sola carta no hay decisión que tomar
-        if (hand.size() == 1) {
-            return hand.get(0);
-        }
+        List<Card> hand = new ArrayList<>(bot.getHand());
+        if (hand.isEmpty()) throw new IllegalStateException("Bot has no cards");
+        if (hand.size() == 1) return hand.get(0);
 
         return switch (difficulty) {
             case EASY   -> decideEasy(hand);
-            case MEDIUM -> decideMedium(hand, game);
-            case HARD   -> decideHard(hand, game);
+            case MEDIUM -> decideMediumGreedy(hand, game, botId);
+            case HARD   -> decideHardMinimax(hand, game, botId);
         };
     }
 
-    // ─── EASY: aleatoriedad pura ──────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════════
+    // EASY — Selección aleatoria
+    // ═══════════════════════════════════════════════════════════════════════════
 
     private Card decideEasy(List<Card> hand) {
         return hand.get(random.nextInt(hand.size()));
     }
 
-    // ─── MEDIUM ───────────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MEDIUM — Búsqueda greedy con función heurística (profundidad 1)
+    //
+    // Para cada carta posible calcula un score heurístico y elige la mejor.
+    // No explora respuestas del oponente — solo evalúa el impacto inmediato.
+    // Esto es una búsqueda de profundidad 1 con evaluación heurística.
+    // ═══════════════════════════════════════════════════════════════════════════
 
-    private Card decideMedium(List<Card> hand, Game game) {
+    private Card decideMediumGreedy(List<Card> hand, Game game, String botId) {
+        Suit trump = game.getTrumpSuit();
         Trick trick = game.getCurrentTrick();
-        Suit trumpSuit = game.getTrumpSuit();
 
-        // El bot lidera la baza: juega la carta más barata (no triunfo si puede evitarlo)
-        if (isLeading(trick)) {
-            return lowestValueCard(hand, trumpSuit, false);
-        }
+        Card best = null;
+        double bestScore = Double.NEGATIVE_INFINITY;
 
-        // El bot sigue: intenta ganar si vale la pena, si no descarta lo más barato
-        Card leadCard = trick.getPlayedCards().get(trick.getLeadPlayerId());
-        return followCardMedium(hand, leadCard, trumpSuit, trick.getTotalPoints());
-    }
-
-    private Card followCardMedium(List<Card> hand, Card leadCard,
-                                  Suit trumpSuit, int trickPoints) {
-        // Intenta ganar con una carta no-triunfo del mismo palo
-        Optional<Card> winnerSameSuit = hand.stream()
-                .filter(c -> c.getSuit() == leadCard.getSuit())
-                .filter(c -> c.getNumericValue() > leadCard.getNumericValue())
-                .min(Comparator.comparingInt(Card::getNumericValue)); // mínima que gana
-
-        if (winnerSameSuit.isPresent()) {
-            return winnerSameSuit.get();
-        }
-
-        // Si la baza tiene suficientes puntos, considera usar un triunfo
-        if (trickPoints >= TRUMP_WORTH_THRESHOLD && leadCard.getSuit() != trumpSuit) {
-            Optional<Card> lowestTrump = hand.stream()
-                    .filter(c -> c.getSuit() == trumpSuit)
-                    .min(Comparator.comparingInt(Card::getNumericValue));
-
-            if (lowestTrump.isPresent()) {
-                return lowestTrump.get();
+        for (Card card : hand) {
+            double score = heuristicScore(card, trick, trump, game, botId);
+            if (score > bestScore) {
+                bestScore = score;
+                best = card;
             }
         }
 
-        // No puede ganar o no vale la pena: descarta lo más barato
-        return lowestValueCard(hand, trumpSuit, true);
-    }
-
-    // ─── HARD ─────────────────────────────────────────────────────────────────
-
-    private Card decideHard(List<Card> hand, Game game) {
-        Trick trick       = game.getCurrentTrick();
-        Suit trumpSuit    = game.getTrumpSuit();
-        boolean isWinning = isBotWinning(game);
-
-        if (isLeading(trick)) {
-            return leadCardHard(hand, trumpSuit, isWinning);
-        }
-
-        Card leadCard = trick.getPlayedCards().get(trick.getLeadPlayerId());
-        return followCardHard(hand, leadCard, trumpSuit, trick.getTotalPoints(), isWinning);
+        return best != null ? best : hand.get(0);
     }
 
     /**
-     * Estrategia de apertura (HARD):
-     * - Si va ganando: juega conservador (carta más barata sin triunfo)
-     * - Si va perdiendo: ataca con carta de alto valor para capturar puntos
-     */
-    private Card leadCardHard(List<Card> hand, Suit trumpSuit, boolean isWinning) {
-        if (isWinning) {
-            // Defensivo: no arriesga triunfos
-            return lowestValueCard(hand, trumpSuit, false);
-        }
-
-        // Ofensivo: juega la carta de mayor valor (no triunfo primero para reservarlo)
-        Optional<Card> highNonTrump = hand.stream()
-                .filter(c -> c.getSuit() != trumpSuit)
-                .max(Comparator.comparingInt(Card::getPoints));
-
-        return highNonTrump.orElseGet(() ->
-                // Solo tiene triunfos: juega el de más valor
-                hand.stream()
-                        .max(Comparator.comparingInt(Card::getPoints))
-                        .orElse(hand.get(0))
-        );
-    }
-
-    /**
-     * Estrategia de seguimiento (HARD):
-     * - Intenta ganar con la carta mínima necesaria
-     * - Usa triunfo solo si los puntos en juego lo justifican (>= umbral)
-     * - Si no puede ganar, descarta la carta de menos valor (sin puntos)
-     */
-    private Card followCardHard(List<Card> hand, Card leadCard,
-                                Suit trumpSuit, int trickPoints, boolean isWinning) {
-        // 1. ¿Puede ganar con el mismo palo con la carta mínima?
-        Optional<Card> minWinnerSameSuit = hand.stream()
-                .filter(c -> c.getSuit() == leadCard.getSuit())
-                .filter(c -> c.getNumericValue() > leadCard.getNumericValue())
-                .min(Comparator.comparingInt(Card::getNumericValue));
-
-        if (minWinnerSameSuit.isPresent()) {
-            // Gana con el mismo palo, siempre conviene
-            return minWinnerSameSuit.get();
-        }
-
-        // 2. ¿Vale la pena usar un triunfo?
-        boolean leadIsTrump        = leadCard.getSuit() == trumpSuit;
-        boolean trickWorthTrumping = trickPoints >= TRUMP_WORTH_THRESHOLD;
-
-        if (!leadIsTrump && trickWorthTrumping) {
-            // Busca el triunfo más bajo que gane (si el líder no es triunfo)
-            Optional<Card> lowestTrump = hand.stream()
-                    .filter(c -> c.getSuit() == trumpSuit)
-                    .min(Comparator.comparingInt(Card::getNumericValue));
-
-            if (lowestTrump.isPresent()) {
-                return lowestTrump.get();
-            }
-        }
-
-        // 3. Si lidera con triunfo, necesita un triunfo mayor para ganar
-        if (leadIsTrump) {
-            Optional<Card> higherTrump = hand.stream()
-                    .filter(c -> c.getSuit() == trumpSuit)
-                    .filter(c -> c.getNumericValue() > leadCard.getNumericValue())
-                    .min(Comparator.comparingInt(Card::getNumericValue));
-
-            if (higherTrump.isPresent() && trickWorthTrumping) {
-                return higherTrump.get();
-            }
-        }
-
-        // 4. No puede / no conviene ganar: descarta la carta de menor valor
-        return lowestValueCard(hand, trumpSuit, true);
-    }
-
-    // ─── Helpers ──────────────────────────────────────────────────────────────
-
-    /**
-     * ¿El bot lidera la baza actual? (nadie ha jugado todavía)
-     */
-    private boolean isLeading(Trick trick) {
-        return trick.getPlayedCards().isEmpty();
-    }
-
-    /**
-     * Devuelve la carta de menor valor de la mano.
+     * Función heurística h(carta, estado).
      *
-     * @param avoidTrumps Si es true, prefiere cartas que no sean triunfo;
-     *                    si solo tiene triunfos, devuelve el triunfo más barato.
+     * Estima el valor de jugar una carta sin explorar el futuro.
+     * Factores:
+     *   + Puntos ganados si la carta gana la baza
+     *   - Valor sacrificado si la carta pierde
+     *   - Penalización por gastar triunfo sin ganar o innecesariamente
+     *   ± Ajuste estratégico según posición (ganando/perdiendo)
      */
-    private Card lowestValueCard(List<Card> hand, Suit trumpSuit, boolean avoidTrumps) {
-        if (avoidTrumps) {
-            // Primero intenta una no-triunfo de bajo valor (0 puntos)
-            Optional<Card> cheapNonTrump = hand.stream()
-                    .filter(c -> c.getSuit() != trumpSuit)
-                    .filter(c -> c.getPoints() == 0)
-                    .findFirst();
+    private double heuristicScore(Card card, Trick trick, Suit trump,
+                                  Game game, String botId) {
+        double score = 0.0;
+        boolean leading = trick.getPlayedCards().isEmpty();
 
-            if (cheapNonTrump.isPresent()) return cheapNonTrump.get();
+        if (leading) {
+            // ─ Liderando la baza
+            // Preferimos cartas baratas no-triunfo para no arriesgar valor.
+            // Si vamos perdiendo, atacamos con cartas de alto valor.
+            if (card.getSuit() == trump) score -= 4.0;
+            score -= card.getPoints() * 0.8;
 
-            // Si no hay cero-puntos no-triunfo, la de menor valor en general (sin triunfo)
-            Optional<Card> lowestNonTrump = hand.stream()
-                    .filter(c -> c.getSuit() != trumpSuit)
-                    .min(Comparator.comparingInt(Card::getPoints));
+            if (!isBotWinning(game, botId) && card.getPoints() >= 10) {
+                score += 3.0; // ataque agresivo cuando se va perdiendo
+            }
 
-            if (lowestNonTrump.isPresent()) return lowestNonTrump.get();
+        } else {
+            // ─ Siguiendo la baza
+            int trickPointsIfWin = trick.getTotalPoints() + card.getPoints();
+            boolean wins = wouldWinTrick(card, trick, trump);
+
+            if (wins) {
+                score += trickPointsIfWin * WIN_MULTIPLIER;
+                score -= card.getPoints() * 0.4;         // ganar con carta barata = mejor
+                if (card.getSuit() == trump) score -= 2.0; // triunfo usado para ganar es aceptable
+            } else {
+                score -= card.getPoints() * LOSS_MULTIPLIER; // perder carta valiosa = malo
+                if (card.getSuit() == trump) score -= TRUMP_WASTE_PENALTY; // nunca perder triunfo gratis
+            }
         }
 
-        // Fallback: la de menor puntos de toda la mano (puede ser triunfo)
-        return hand.stream()
-                .min(Comparator.comparingInt(Card::getPoints))
-                .orElse(hand.get(0));
+        // Bonus estratégico: cuando se va ganando, conservar triunfos
+        if (isBotWinning(game, botId) && card.getSuit() == trump) {
+            score -= 2.0;
+        }
+
+        return score;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // HARD — Minimax con poda Alpha-Beta
+    //
+    // Algoritmo Minimax (Russell & Norvig, cap. 5):
+    //
+    //   MAX node (bot)      : elige la carta que MAXIMIZA su utilidad
+    //   MIN node (oponente) : elige la carta que MINIMIZA la utilidad del bot
+    //
+    // Poda Alpha-Beta:
+    //   α = mejor garantía del MAX hasta ahora (empieza en -∞)
+    //   β = mejor garantía del MIN hasta ahora (empieza en +∞)
+    //   Si β ≤ α → podar (el oponente nunca permitirá esta rama)
+    //
+    // Información incompleta:
+    //   No conocemos las cartas del oponente. Estimamos las "desconocidas"
+    //   (todas las cartas del juego menos las que sí conocemos) y simulamos
+    //   que el oponente elige la peor para nosotros entre ellas.
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    private Card decideHardMinimax(List<Card> hand, Game game, String botId) {
+        Suit trump = game.getTrumpSuit();
+        Trick currentTrick = game.getCurrentTrick();
+        List<Card> unknownCards = getUnknownCards(game, botId);
+
+        Card bestCard = null;
+        double bestScore = Double.NEGATIVE_INFINITY;
+        double alpha = Double.NEGATIVE_INFINITY;
+        double beta  = Double.POSITIVE_INFINITY;
+
+        for (Card card : hand) {
+            // MAX node: el bot juega 'card'
+            SimulatedTrick simTrick = new SimulatedTrick(currentTrick, botId, card);
+
+            double score;
+            if (simTrick.isComplete(game.getPlayers().size())) {
+                // Baza completada con esta carta → evaluar resultado directo
+                score = evaluateCompletedTrick(simTrick, botId, trump);
+            } else {
+                // Quedan jugadores → MIN node (oponente responde)
+                score = minValue(simTrick, unknownCards, trump, game, botId,
+                        MINIMAX_DEPTH - 1, alpha, beta);
+            }
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestCard = card;
+            }
+            alpha = Math.max(alpha, bestScore);
+        }
+
+        return bestCard != null ? bestCard : hand.get(0);
     }
 
     /**
-     * Comprueba si el bot está ganando la partida en puntuación.
-     * Se usa para decidir si jugar defensivo u ofensivo.
+     * MIN node: el oponente elige la jugada que MINIMIZA la utilidad del bot.
+     *
+     * Como no sabemos las cartas del oponente, probamos con un subconjunto
+     * representativo de las cartas "desconocidas" (las que el oponente podría tener).
+     * Poda Beta: si encontramos un valor ≤ alpha, cortamos (el MAX nunca elegiría esta rama).
      */
-    private boolean isBotWinning(Game game) {
-        Player bot = game.getCurrentPlayer();
-        if (bot == null) return false;
+    private double minValue(SimulatedTrick trick, List<Card> unknownCards,
+                            Suit trump, Game game, String botId,
+                            int depth, double alpha, double beta) {
+        if (depth == 0 || unknownCards.isEmpty()) {
+            return evaluatePartialTrick(trick, botId, trump, game);
+        }
 
+        double minScore = Double.POSITIVE_INFINITY;
+
+        // Seleccionamos las cartas candidatas más representativas del oponente
+        // para no explotar el árbol de búsqueda
+        List<Card> candidates = selectOpponentCandidates(unknownCards, trick, trump);
+
+        for (Card opCard : candidates) {
+            SimulatedTrick newTrick = new SimulatedTrick(trick, "OPPONENT", opCard);
+
+            double score;
+            if (newTrick.isComplete(game.getPlayers().size())) {
+                score = evaluateCompletedTrick(newTrick, botId, trump);
+            } else {
+                // Más jugadores → MAX node de nuevo (turno del bot en siguiente vuelta)
+                score = maxValue(newTrick, unknownCards, trump, game, botId,
+                        depth - 1, alpha, beta);
+            }
+
+            minScore = Math.min(minScore, score);
+            beta = Math.min(beta, minScore);
+
+            // ─ Poda Alpha-Beta
+            // El MAX ya tiene garantizado 'alpha'. Si el MIN puede forzar
+            // algo ≤ alpha, el MAX nunca elegiría esta rama → cortar.
+            if (beta <= alpha) break;
+        }
+
+        return minScore;
+    }
+
+    /**
+     * MAX node: el bot elige la jugada que MAXIMIZA su utilidad.
+     * Se usa en los niveles intermedios del árbol cuando el bot tiene otro turno.
+     */
+    private double maxValue(SimulatedTrick trick, List<Card> unknownCards,
+                            Suit trump, Game game, String botId,
+                            int depth, double alpha, double beta) {
+        if (depth == 0) {
+            return evaluatePartialTrick(trick, botId, trump, game);
+        }
+
+        Player bot = game.getPlayerById(botId);
+        if (bot == null) return 0;
+
+        double maxScore = Double.NEGATIVE_INFINITY;
+
+        for (Card card : bot.getHand()) {
+            SimulatedTrick newTrick = new SimulatedTrick(trick, botId, card);
+            double score = minValue(newTrick, unknownCards, trump, game, botId,
+                    depth - 1, alpha, beta);
+
+            maxScore = Math.max(maxScore, score);
+            alpha = Math.max(alpha, maxScore);
+
+            if (beta <= alpha) break; // Poda Alpha
+        }
+
+        return maxScore;
+    }
+
+    // ─ Funciones de evaluación (nodos terminales)
+
+    /**
+     * Evalúa el resultado de una baza completada.
+     * Utilidad = puntos ganados (positivo) o puntos perdidos (negativo).
+     */
+    private double evaluateCompletedTrick(SimulatedTrick trick, String botId, Suit trump) {
+        String winnerId = determineTrickWinner(trick, trump);
+        int points = trick.getTotalPoints();
+
+        if (botId.equals(winnerId)) {
+            return points * WIN_MULTIPLIER;  // ganamos la baza
+        } else {
+            return -points * 0.8;            // perdimos la baza
+        }
+    }
+
+    /**
+     * Evalúa una baza aún no completada.
+     * Combina: ventaja en puntuación global + quién va ganando la baza parcial.
+     */
+    private double evaluatePartialTrick(SimulatedTrick trick, String botId,
+                                        Suit trump, Game game) {
+        String currentLeader = determineTrickWinner(trick, trump);
+        int trickPoints = trick.getTotalPoints();
+
+        // Diferencia de puntuación en el juego completo
+        Player bot = game.getPlayerById(botId);
+        int botScore = bot != null ? bot.getScore() : 0;
+        int maxOpponentScore = game.getPlayers().stream()
+                .filter(p -> !p.getId().equals(botId))
+                .mapToInt(Player::getScore)
+                .max().orElse(0);
+
+        double score = (botScore - maxOpponentScore) * 0.3;
+
+        // Ajustar según quién lidera la baza parcial
+        if (botId.equals(currentLeader)) {
+            score += trickPoints * 0.8;
+        } else {
+            score -= trickPoints * 0.5;
+        }
+
+        return score;
+    }
+
+    // ─ Helpers
+
+    /**
+     * Determina si 'card' ganaría la baza actual según las reglas de Brisca.
+     */
+    private boolean wouldWinTrick(Card card, Trick trick, Suit trump) {
+        SimulatedTrick sim = new SimulatedTrick(trick, "__CHECK__", card);
+        return "__CHECK__".equals(determineTrickWinner(sim, trump));
+    }
+
+    /**
+     * Determina el ganador de una baza simulada.
+     * Replica las reglas de TrickResolver: triunfo > palo líder > resto.
+     */
+    private String determineTrickWinner(SimulatedTrick trick, Suit trump) {
+        Map<String, Card> played = trick.getPlayedCards();
+        Suit leadSuit = trick.getLeadSuit();
+
+        String winnerId = null;
+        Card winningCard = null;
+
+        for (Map.Entry<String, Card> entry : played.entrySet()) {
+            if (winningCard == null) {
+                winnerId = entry.getKey();
+                winningCard = entry.getValue();
+                continue;
+            }
+            if (isCardStronger(entry.getValue(), winningCard, leadSuit, trump)) {
+                winnerId = entry.getKey();
+                winningCard = entry.getValue();
+            }
+        }
+        return winnerId;
+    }
+
+    private boolean isCardStronger(Card challenger, Card current, Suit leadSuit, Suit trump) {
+        boolean cTrump = challenger.getSuit() == trump;
+        boolean wTrump = current.getSuit() == trump;
+        if (cTrump && !wTrump) return true;
+        if (!cTrump && wTrump) return false;
+        if (cTrump) return challenger.getNumericValue() > current.getNumericValue();
+        boolean cLead = challenger.getSuit() == leadSuit;
+        boolean wLead = current.getSuit() == leadSuit;
+        if (cLead && !wLead) return true;
+        if (!cLead && wLead) return false;
+        if (cLead) return challenger.getNumericValue() > current.getNumericValue();
+        return false;
+    }
+
+    /**
+     * Devuelve todas las cartas que el bot NO conoce: no están en su mano
+     * ni han sido jugadas en la baza actual.
+     * Son las posibles cartas que el oponente podría tener.
+     */
+    private List<Card> getUnknownCards(Game game, String botId) {
+        Set<Card> knownCards = new HashSet<>();
+
+        Player bot = game.getPlayerById(botId);
+        if (bot != null) knownCards.addAll(bot.getHand());
+        knownCards.addAll(game.getCurrentTrick().getPlayedCards().values());
+
+        List<Card> allCards = new ArrayList<>();
+        for (Suit suit : Suit.values()) {
+            for (Rank rank : Rank.values()) {
+                allCards.add(new Card(suit, rank));
+            }
+        }
+        allCards.removeAll(knownCards);
+        return allCards;
+    }
+
+    /**
+     * Selecciona hasta 5 cartas representativas del oponente para la simulación.
+     * Evaluar todas las cartas desconocidas haría el árbol demasiado grande.
+     * Estrategia: carta de mayor valor, menor valor, triunfo más bajo, dos intermedias.
+     */
+    private List<Card> selectOpponentCandidates(List<Card> unknownCards,
+                                                SimulatedTrick trick, Suit trump) {
+        if (unknownCards.isEmpty()) return unknownCards;
+
+        List<Card> sorted = new ArrayList<>(unknownCards);
+        sorted.sort(Comparator.comparingInt(Card::getPoints).reversed());
+
+        Set<Card> candidates = new LinkedHashSet<>();
+        candidates.add(sorted.get(0));                         // mayor valor
+        candidates.add(sorted.get(sorted.size() - 1));        // menor valor
+
+        sorted.stream()
+                .filter(c -> c.getSuit() == trump)
+                .min(Comparator.comparingInt(Card::getNumericValue))
+                .ifPresent(candidates::add);                   // triunfo más bajo
+
+        if (sorted.size() > 3) candidates.add(sorted.get(sorted.size() / 2));
+        if (sorted.size() > 4) candidates.add(sorted.get(1));
+
+        return new ArrayList<>(candidates);
+    }
+
+    private boolean isBotWinning(Game game, String botId) {
+        Player bot = game.getPlayerById(botId);
+        if (bot == null) return false;
         return game.getPlayers().stream()
-                .filter(p -> !p.getId().equals(bot.getId()))
+                .filter(p -> !p.getId().equals(botId))
                 .allMatch(p -> bot.getScore() > p.getScore());
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SimulatedTrick — estado inmutable de una baza durante la simulación
+    //
+    // Representa una baza parcial o completa en el árbol Minimax.
+    // Es inmutable: cada "jugada" crea una nueva instancia sin modificar la anterior.
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    private static class SimulatedTrick {
+        private final Map<String, Card> playedCards;
+        private final String leadPlayerId;
+
+        /** Crea una simulación a partir de una baza real del juego. */
+        SimulatedTrick(Trick original, String playerId, Card card) {
+            this.playedCards = new LinkedHashMap<>(original.getPlayedCards());
+            this.playedCards.put(playerId, card);
+            this.leadPlayerId = original.getLeadPlayerId() != null
+                    ? original.getLeadPlayerId()
+                    : playerId; // si la baza estaba vacía, este jugador lidera
+        }
+
+        /** Crea una simulación a partir de otra simulación (nodo hijo en el árbol). */
+        SimulatedTrick(SimulatedTrick previous, String playerId, Card card) {
+            this.playedCards = new LinkedHashMap<>(previous.playedCards);
+            this.playedCards.put(playerId, card);
+            this.leadPlayerId = previous.leadPlayerId;
+        }
+
+        Map<String, Card> getPlayedCards() { return playedCards; }
+
+        Suit getLeadSuit() {
+            Card lead = playedCards.get(leadPlayerId);
+            return lead != null ? lead.getSuit() : null;
+        }
+
+        int getTotalPoints() {
+            return playedCards.values().stream().mapToInt(Card::getPoints).sum();
+        }
+
+        boolean isComplete(int playerCount) {
+            return playedCards.size() >= playerCount;
+        }
     }
 }
