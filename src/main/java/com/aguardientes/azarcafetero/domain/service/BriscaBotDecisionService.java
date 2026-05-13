@@ -78,19 +78,46 @@ public class BriscaBotDecisionService {
     private Card decideMediumGreedy(List<Card> hand, Game game, String botId) {
         Suit trump = game.getTrumpSuit();
         Trick trick = game.getCurrentTrick();
+        boolean leading = trick.getPlayedCards().isEmpty();
 
-        Card best = null;
-        double bestScore = Double.NEGATIVE_INFINITY;
-
-        for (Card card : hand) {
-            double score = heuristicScore(card, trick, trump, game, botId);
-            if (score > bestScore) {
-                bestScore = score;
-                best = card;
-            }
+        if (leading) {
+            // Liderando: jugar la carta más barata sin ser triunfo
+            return hand.stream()
+                    .filter(c -> c.getSuit() != trump)
+                    .min(Comparator.comparingInt(Card::getPoints)
+                            .thenComparingInt(Card::getNumericValue))
+                    .orElseGet(() -> hand.stream()
+                            .min(Comparator.comparingInt(Card::getNumericValue))
+                            .orElse(hand.get(0)));
         }
 
-        return best != null ? best : hand.get(0);
+        // Siguiendo: intentar ganar con la carta mínima necesaria
+        int trickPoints = trick.getTotalPoints();
+
+        // Busca la carta no-triunfo de menor valor que gane la baza
+        Optional<Card> minWinnerSameSuit = hand.stream()
+                .filter(c -> c.getSuit() != trump)
+                .filter(c -> wouldWinTrick(c, trick, trump))
+                .min(Comparator.comparingInt(Card::getNumericValue));
+
+        if (minWinnerSameSuit.isPresent()) {
+            return minWinnerSameSuit.get();
+        }
+
+        // No puede ganar sin triunfo — ¿vale la pena usar triunfo?
+        if (trickPoints >= 5) {
+            Optional<Card> minTrump = hand.stream()
+                    .filter(c -> c.getSuit() == trump)
+                    .filter(c -> wouldWinTrick(c, trick, trump))
+                    .min(Comparator.comparingInt(Card::getNumericValue));
+            if (minTrump.isPresent()) return minTrump.get();
+        }
+
+        // Descartar la más barata
+        return hand.stream()
+                .min(Comparator.comparingInt(Card::getPoints)
+                        .thenComparingInt(Card::getNumericValue))
+                .orElse(hand.get(0));
     }
 
     /**
