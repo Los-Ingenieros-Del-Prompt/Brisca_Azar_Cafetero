@@ -9,10 +9,10 @@ import com.aguardientes.azarcafetero.domain.service.BriscaBotDecisionService;
 import com.aguardientes.azarcafetero.domain.service.GameRules;
 import com.aguardientes.azarcafetero.domain.service.ScoreCalculator;
 import com.aguardientes.azarcafetero.domain.service.TrickResolver;
-import com.aguardientes.azarcafetero.infrastructure.wallet.HttpWalletClient;
+
 import com.aguardientes.azarcafetero.infrastructure.wallet.NoOpWalletClient;
 
-import org.springframework.beans.factory.annotation.Value;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
