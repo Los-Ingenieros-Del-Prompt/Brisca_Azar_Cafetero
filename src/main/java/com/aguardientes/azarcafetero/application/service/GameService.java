@@ -203,8 +203,10 @@ public class GameService implements
                     Player winner = game.getWinner();
                     String winnerUserId = winner != null ? winner.getId() : null;
                     if (winnerUserId != null) settlePrize(game, null);
-                    eventPublisher.publishGameFinished(game.getId(), winnerUserId);
-                    eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
+                    List<String> winnerIds = game.getWinners().stream()
+                            .map(Player::getId)
+                            .toList();
+                    eventPublisher.publishGameFinished(game.getId(), winnerIds);                    eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
                 }
                 break;
             }
@@ -263,7 +265,10 @@ public class GameService implements
             if (winnnerUserId != null) {
                 settlePrize(game, null);
             }
-            eventPublisher.publishGameFinished(game.getId(), winnnerUserId);
+            List<String> winnerIds = game.getWinners().stream()
+                    .map(Player::getId)
+                    .toList();
+            eventPublisher.publishGameFinished(game.getId(), winnerIds);
         }
     }
 

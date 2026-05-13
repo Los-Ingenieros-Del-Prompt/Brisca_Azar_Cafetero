@@ -6,6 +6,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -61,10 +62,10 @@ public class WebSocketGameEventPublisher implements GameEventPublisher {
     }
 
     @Override
-    public void publishGameFinished(String gameId, String winnerId) {
+    public void publishGameFinished(String gameId, List<String> winnerIds) {
         sendGameEvent(gameId, "GAME_FINISHED", Map.of(
                 "gameId", gameId,
-                "winnerId", winnerId != null ? winnerId : "DRAW"
+                "winnerIds", winnerIds.isEmpty() ? List.of("DRAW") : winnerIds
         ));
     }
 
