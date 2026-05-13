@@ -1,6 +1,7 @@
-package com.aguardientes.azarcafetero.domain.service;
+package com.aguardientes.azarcafetero;
 
 import com.aguardientes.azarcafetero.domain.model.*;
+import com.aguardientes.azarcafetero.domain.service.BriscaBotDecisionService;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
