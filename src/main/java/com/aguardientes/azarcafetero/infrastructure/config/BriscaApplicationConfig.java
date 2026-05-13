@@ -40,7 +40,9 @@ public class BriscaApplicationConfig {
     public WalletClient walletClient(
             @Value("${lobby.service.url}") String lobbyServiceUrl,
             @Value("${internal.api.key}") String internalApiKey) {
-        return new HttpWalletClient(lobbyServiceUrl + "/api", internalApiKey);
+
+        return new HttpWalletClient(lobbyServiceUrl, internalApiKey);
+
     }
 
     @Bean
