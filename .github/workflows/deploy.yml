@@ -38,7 +38,7 @@ jobs:
               "docker pull ${{ secrets.DOCKERHUB_USERNAME }}/azar-brisca:latest",
               "docker stop azar-brisca || true",
               "docker rm azar-brisca || true",
-              "docker run -d --name azar-brisca --restart unless-stopped -p 8089:8089 -e LOBBY_SERVICE_URL=http://azar-alb-774975018.us-east-1.elb.amazonaws.com ${{ secrets.DOCKERHUB_USERNAME }}/azar-brisca:latest"
+              "docker run -d --name azar-brisca --restart unless-stopped -p 8089:8089 -e LOBBY_SERVICE_URL=http://azar-alb-774975018.us-east-1.elb.amazonaws.com -e INTERNAL_API_KEY=${{ secrets.INTERNAL_API_KEY }} ${{ secrets.DOCKERHUB_USERNAME }}/azar-brisca:latest"
             ]' \
             --region us-east-1 \
             --query "Command.CommandId" \
