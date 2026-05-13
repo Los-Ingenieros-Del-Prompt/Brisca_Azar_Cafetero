@@ -202,7 +202,7 @@ public class GameService implements
                     gameRepository.save(game);
                     Player winner = game.getWinner();
                     String winnerUserId = winner != null ? winner.getId() : null;
-                    if (winnerUserId != null) settlePrize(game, winnerUserId);
+                    if (winnerUserId != null) settlePrize(game, null);
                     eventPublisher.publishGameFinished(game.getId(), winnerUserId);
                     eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
                 }
@@ -261,7 +261,7 @@ public class GameService implements
             Player winner    = game.getWinner();
             String winnnerUserId = winner != null ? winner.getId() : null;
             if (winnnerUserId != null) {
-                settlePrize(game, winnnerUserId);
+                settlePrize(game, null);
             }
             eventPublisher.publishGameFinished(game.getId(), winnnerUserId);
         }
@@ -270,21 +270,39 @@ public class GameService implements
     // ─── Wallet: solo opera con jugadores humanos ─────────────────────────────
 
     private void settlePrize(Game game, String winnerUserId) {
-        if (AddBotCommand.isBot(winnerUserId)) return; // bot ganó, nadie cobra
-
         List<Player> players  = game.getPlayers();
         BigDecimal betAmount  = game.getBetAmount();
-        // Premio reducido al 50% si había bots en la partida (PBI 158)
         boolean hasBot        = players.stream().anyMatch(p -> AddBotCommand.isBot(p.getId()));
         BigDecimal multiplier = hasBot ? new BigDecimal("0.5") : BigDecimal.ONE;
-        BigDecimal totalPrize = betAmount.multiply(BigDecimal.valueOf(players.size()))
-                .multiply(multiplier);
 
-        walletClient.receiveWin(winnerUserId, totalPrize);
+        int topScore = players.stream()
+                .mapToInt(Player::getScore)
+                .max()
+                .orElse(0);
+
+        List<Player> winners = players.stream()
+                .filter(p -> p.getScore() == topScore)
+                .toList();
+
+        List<Player> humanWinners = winners.stream()
+                .filter(p -> !AddBotCommand.isBot(p.getId()))
+                .toList();
+
+        // Nadie humano gana (todos bots o empate con bots ganando)
+        if (humanWinners.isEmpty()) return;
+
+        BigDecimal totalPot   = betAmount
+                .multiply(BigDecimal.valueOf(players.size()))
+                .multiply(multiplier);
+        BigDecimal prizeEach  = totalPot.divide(
+                BigDecimal.valueOf(humanWinners.size()),
+                2, java.math.RoundingMode.DOWN);
+
+        humanWinners.forEach(w -> walletClient.receiveWin(w.getId(), prizeEach));
 
         players.stream()
-                .filter(p -> !p.getId().equals(winnerUserId))
-                .filter(p -> !AddBotCommand.isBot(p.getId()))   // bots no registran pérdida
+                .filter(p -> !AddBotCommand.isBot(p.getId()))
+                .filter(p -> winners.stream().noneMatch(w -> w.getId().equals(p.getId())))
                 .forEach(loser -> walletClient.registerLoss(loser.getId(), betAmount));
     }
 
