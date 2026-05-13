@@ -27,7 +27,7 @@ public class HttpWalletClient implements WalletClient {
         log.info("Wallet → placeBet userId={} amount={}", userId, amount);
         try {
             restClient.post()
-                    .uri("/player/bet")
+                    .uri("/api/player/bet")
                     .header("X-Internal-Key", internalApiKey)
                     .body(Map.of("userId", userId, "amount", amount))
                     .retrieve()
@@ -44,7 +44,7 @@ public class HttpWalletClient implements WalletClient {
         log.info("Wallet → receiveWin userId={} amount={}", userId, amount);
         try {
             restClient.post()
-                    .uri("/player/win")
+                    .uri("/api/player/win")
                     .header("X-Internal-Key", internalApiKey)
                     .body(Map.of("userId", userId, "amount", amount))
                     .retrieve()
@@ -61,7 +61,7 @@ public class HttpWalletClient implements WalletClient {
         log.info("Wallet → registerLoss userId={} amount={}", userId, amount);
         try {
             restClient.post()
-                    .uri("/player/loss")
+                    .uri("/api/player/loss")
                     .header("X-Internal-Key", internalApiKey)
                     .body(Map.of("userId", userId, "amount", amount))
                     .retrieve()
