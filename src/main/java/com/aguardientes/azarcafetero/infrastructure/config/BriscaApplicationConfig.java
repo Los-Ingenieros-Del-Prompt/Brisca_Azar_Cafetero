@@ -10,6 +10,8 @@ import com.aguardientes.azarcafetero.domain.service.GameRules;
 import com.aguardientes.azarcafetero.domain.service.ScoreCalculator;
 import com.aguardientes.azarcafetero.domain.service.TrickResolver;
 import com.aguardientes.azarcafetero.infrastructure.wallet.HttpWalletClient;
+import com.aguardientes.azarcafetero.infrastructure.wallet.NoOpWalletClient;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -36,10 +38,8 @@ public class BriscaApplicationConfig {
     }
 
     @Bean
-    public WalletClient walletClient(
-            @Value("${wallet.service.url}") String walletServiceUrl,
-            @Value("${internal.api.key}") String internalApiKey) {
-        return new HttpWalletClient(walletServiceUrl, internalApiKey);
+    public WalletClient walletClient() {
+        return new NoOpWalletClient();
     }
 
     @Bean
