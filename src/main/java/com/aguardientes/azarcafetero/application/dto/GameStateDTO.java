@@ -14,5 +14,5 @@ public record GameStateDTO(
         CardDTO trumpCard,
         Suit trumpSuit,
         int remainingCards,
-        PlayerDTO winner
+        List<PlayerDTO> winners
 ) {}

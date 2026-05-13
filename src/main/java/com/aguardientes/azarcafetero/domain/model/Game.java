@@ -166,4 +166,15 @@ public class Game {
     public boolean canStart() {
         return players.size() >= minPlayers && state == GameState.WAITING_FOR_PLAYERS;
     }
+
+    public List<Player> getWinners() {
+        if (state != GameState.FINISHED) return List.of();
+        int topScore = players.stream()
+                .mapToInt(Player::getScore)
+                .max()
+                .orElse(0);
+        return players.stream()
+                .filter(p -> p.getScore() == topScore)
+                .toList();
+    }
 }

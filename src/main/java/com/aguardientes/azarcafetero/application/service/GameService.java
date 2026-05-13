@@ -200,10 +200,11 @@ public class GameService implements
                 if (game.isGameOver()) {
                     game.finish();
                     gameRepository.save(game);
-                    Player winner = game.getWinner();
-                    String winnerUserId = winner != null ? winner.getId() : null;
-                    if (winnerUserId != null) settlePrize(game, null);
-                    eventPublisher.publishGameFinished(game.getId(), winnerUserId);
+                    settlePrize(game);
+                    List<String> winnerIds = game.getWinners().stream()
+                            .map(Player::getId)
+                            .toList();
+                    eventPublisher.publishGameFinished(game.getId(), winnerIds);
                     eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
                 }
                 break;
@@ -261,15 +262,18 @@ public class GameService implements
             Player winner    = game.getWinner();
             String winnnerUserId = winner != null ? winner.getId() : null;
             if (winnnerUserId != null) {
-                settlePrize(game, null);
+                settlePrize(game);
             }
-            eventPublisher.publishGameFinished(game.getId(), winnnerUserId);
+            List<String> winnerIds = game.getWinners().stream()
+                    .map(Player::getId)
+                    .toList();
+            eventPublisher.publishGameFinished(game.getId(), winnerIds);
         }
     }
 
     // ─── Wallet: solo opera con jugadores humanos ─────────────────────────────
 
-    private void settlePrize(Game game, String winnerUserId) {
+    private void settlePrize(Game game) {
         List<Player> players  = game.getPlayers();
         BigDecimal betAmount  = game.getBetAmount();
         boolean hasBot        = players.stream().anyMatch(p -> AddBotCommand.isBot(p.getId()));

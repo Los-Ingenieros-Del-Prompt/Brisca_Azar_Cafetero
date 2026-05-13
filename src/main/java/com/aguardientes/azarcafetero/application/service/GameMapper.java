@@ -78,9 +78,11 @@ public class GameMapper {
         
         Player currentPlayer = game.getCurrentPlayer();
         String currentPlayerId = currentPlayer != null ? currentPlayer.getId() : null;
-        
-        Player winner = game.getWinner();
-        
+
+        List<PlayerDTO> winners = game.getWinners().stream()
+                .map(w -> toPlayerDTO(w, false))
+                .toList();
+
         return new GameStateDTO(
                 game.getId(),
                 game.getState(),
@@ -90,7 +92,7 @@ public class GameMapper {
                 toCardDTO(game.getTrumpCard()),
                 game.getTrumpSuit(),
                 game.getDeck().remainingCards(),
-                toPlayerDTO(winner, false)
+                winners
         );
     }
 
@@ -105,9 +107,11 @@ public class GameMapper {
         
         Player currentPlayer = game.getCurrentPlayer();
         String currentPlayerId = currentPlayer != null ? currentPlayer.getId() : null;
-        
-        Player winner = game.getWinner();
-        
+
+        List<PlayerDTO> winners = game.getWinners().stream()
+                .map(w -> toPlayerDTO(w, false))
+                .toList();
+
         return new GameStateDTO(
                 game.getId(),
                 game.getState(),
@@ -117,7 +121,7 @@ public class GameMapper {
                 toCardDTO(game.getTrumpCard()),
                 game.getTrumpSuit(),
                 game.getDeck().remainingCards(),
-                toPlayerDTO(winner, false)
+                winners
         );
     }
 
@@ -133,9 +137,11 @@ public class GameMapper {
         
         Player currentPlayer = game.getCurrentPlayer();
         String currentPlayerId = currentPlayer != null ? currentPlayer.getId() : null;
-        
-        Player winner = game.getWinner();
-        
+
+        List<PlayerDTO> winners = game.getWinners().stream()
+                .map(w -> toPlayerDTO(w, false))
+                .toList();
+
         return new GameStateDTO(
                 game.getId(),
                 game.getState(),
@@ -145,7 +151,7 @@ public class GameMapper {
                 toCardDTO(game.getTrumpCard()),
                 game.getTrumpSuit(),
                 game.getDeck().remainingCards(),
-                toPlayerDTO(winner, false)
+                winners
         );
     }
 }

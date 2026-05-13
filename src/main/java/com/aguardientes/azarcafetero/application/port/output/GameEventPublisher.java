@@ -1,6 +1,7 @@
 package com.aguardientes.azarcafetero.application.port.output;
 
 import com.aguardientes.azarcafetero.application.dto.GameStateDTO;
+import java.util.List;
 
 public interface GameEventPublisher {
     
@@ -15,6 +16,6 @@ public interface GameEventPublisher {
     void publishTrickCompleted(String gameId, String winnerId, int points);
     
     void publishGameStateUpdated(GameStateDTO gameState);
-    
-    void publishGameFinished(String gameId, String winnerId);
+
+    void publishGameFinished(String gameId, List<String> winnerIds);
 }
