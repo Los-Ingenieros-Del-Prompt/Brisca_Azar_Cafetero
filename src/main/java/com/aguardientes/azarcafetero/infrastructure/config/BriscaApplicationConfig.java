@@ -11,7 +11,6 @@ import com.aguardientes.azarcafetero.domain.service.ScoreCalculator;
 import com.aguardientes.azarcafetero.domain.service.TrickResolver;
 import com.aguardientes.azarcafetero.infrastructure.wallet.HttpWalletClient;
 import org.springframework.beans.factory.annotation.Value;
-import com.aguardientes.azarcafetero.infrastructure.wallet.HttpWalletClient;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
