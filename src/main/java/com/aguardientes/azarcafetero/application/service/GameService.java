@@ -217,14 +217,7 @@ public class GameService implements
             // Si el bot no tiene cartas verificar si la partida terminó
             if (!currentPlayer.hasCards()) {
                 if (game.isGameOver()) {
-                    game.finish();
-                    gameRepository.save(game);
-                    settlePrize(game);
-                    List<String> winnerIds = game.getWinners().stream()
-                            .map(Player::getId)
-                            .toList();
-                    eventPublisher.publishGameFinished(game.getId(), winnerIds);
-                    eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
+                    finalizeAndCleanup(game);
                 }
                 break;
             }
@@ -276,17 +269,7 @@ public class GameService implements
         eventPublisher.publishTrickCompleted(game.getId(), winnerId, points);
 
         if (game.isGameOver()) {
-            game.finish();
-            gameRepository.save(game);
-            Player winner    = game.getWinner();
-            String winnnerUserId = winner != null ? winner.getId() : null;
-            if (winnnerUserId != null) {
-                settlePrize(game);
-            }
-            List<String> winnerIds = game.getWinners().stream()
-                    .map(Player::getId)
-                    .toList();
-            eventPublisher.publishGameFinished(game.getId(), winnerIds);
+            finalizeAndCleanup(game);
         }
     }
 
@@ -363,5 +346,32 @@ public class GameService implements
     private String capitalize(String s) {
         if (s == null || s.isEmpty()) return s;
         return s.charAt(0) + s.substring(1).toLowerCase();
+    }
+
+    /**
+     * Finaliza el juego: persiste estado FINISHED, liquida premios,
+     * publica eventos, y elimina el Game del repositorio.
+     */
+    private void finalizeAndCleanup(Game game) {
+        game.finish();
+        gameRepository.save(game);
+
+        try {
+            settlePrize(game);
+        } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(GameService.class)
+                    .error("settlePrize falló para game={}", game.getId(), e);
+        }
+
+        List<String> winnerIds = game.getWinners().stream()
+                .map(Player::getId)
+                .toList();
+        eventPublisher.publishGameFinished(game.getId(), winnerIds);
+        eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
+
+        // Eliminar el Game del repositorio: la partida terminó, libera memoria
+        gameRepository.deleteById(game.getId());
+        org.slf4j.LoggerFactory.getLogger(GameService.class)
+                .info("Game {} finalizado y eliminado del repositorio", game.getId());
     }
 }
