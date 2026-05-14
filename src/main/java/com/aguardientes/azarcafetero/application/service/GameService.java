@@ -358,9 +358,14 @@ public class GameService implements
 
         try {
             settlePrize(game);
+        } catch (RuntimeException e) {
+            org.slf4j.LoggerFactory.getLogger(GameService.class)
+                    .error("settlePrize falló para game={}; se aborta la limpieza para permitir reintento/reconciliación", game.getId(), e);
+            throw e;
         } catch (Exception e) {
             org.slf4j.LoggerFactory.getLogger(GameService.class)
-                    .error("settlePrize falló para game={}", game.getId(), e);
+                    .error("settlePrize falló para game={}; se aborta la limpieza para permitir reintento/reconciliación", game.getId(), e);
+            throw new IllegalStateException("No se pudo liquidar el premio para game=" + game.getId(), e);
         }
 
         List<String> winnerIds = game.getWinners().stream()
