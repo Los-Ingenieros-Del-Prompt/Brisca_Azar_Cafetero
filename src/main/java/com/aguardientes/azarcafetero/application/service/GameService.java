@@ -103,7 +103,8 @@ public class GameService implements
 
         synchronized (game) {
             game.removePlayer(command.playerId());
-            if (game.getPlayers().isEmpty()) {
+            // Clean up if no human players left
+            if (!game.hasHumanPlayers()) {
                 gameRepository.deleteById(game.getId());
             } else {
                 gameRepository.save(game);

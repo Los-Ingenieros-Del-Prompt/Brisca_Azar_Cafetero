@@ -196,4 +196,8 @@ public class Game {
                 .filter(p -> p.getScore() == topScore)
                 .toList();
     }
+
+    public boolean hasHumanPlayers() {
+        return players.stream().anyMatch(p -> !p.getId().startsWith("BOT_"));
+    }
 }
