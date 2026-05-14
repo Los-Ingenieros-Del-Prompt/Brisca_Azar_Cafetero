@@ -18,6 +18,7 @@ import java.util.List;
 public class GameService implements
         CreateGameUseCase,
         JoinGameUseCase,
+        LeaveGameUseCase,
         StartGameUseCase,
         PlayCardUseCase,
         GetGameStateUseCase {
@@ -91,6 +92,23 @@ public class GameService implements
                 eventPublisher.publishPlayerJoined(game.getId(), player.getId());
             }
             eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
+            return gameMapper.toFullGameStateDTO(game);
+        }
+    }
+
+    @Override
+    public GameStateDTO leaveGame(LeaveGameCommand command) {
+        Game game = gameRepository.findById(command.gameId()).orElse(null);
+        if (game == null) return null;
+
+        synchronized (game) {
+            game.removePlayer(command.playerId());
+            if (game.getPlayers().isEmpty()) {
+                gameRepository.deleteById(game.getId());
+            } else {
+                gameRepository.save(game);
+                eventPublisher.publishGameStateUpdated(gameMapper.toFullGameStateDTO(game));
+            }
             return gameMapper.toFullGameStateDTO(game);
         }
     }

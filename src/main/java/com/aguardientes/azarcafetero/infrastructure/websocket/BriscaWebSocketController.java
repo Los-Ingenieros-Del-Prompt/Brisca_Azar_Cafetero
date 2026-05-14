@@ -56,8 +56,20 @@ public class BriscaWebSocketController {
     }
 
     @MessageMapping("/game/{gameId}/join")
-    public void joinGame(JoinGameCommand command, @DestinationVariable String gameId) {
+    public void joinGame(JoinGameCommand command, @DestinationVariable String gameId, org.springframework.messaging.simp.SimpMessageHeaderAccessor headerAccessor) {
         joinGameUseCase.joinGame(command);
+        
+        // Store session attributes for disconnect handling
+        headerAccessor.getSessionAttributes().put("playerId", command.playerId());
+        headerAccessor.getSessionAttributes().put("playerName", command.playerName());
+        headerAccessor.getSessionAttributes().put("gameId", gameId);
+        
+        broadcast(gameId);
+    }
+
+    @MessageMapping("/game/{gameId}/leave")
+    public void leaveGame(LeaveGameCommand command, @DestinationVariable String gameId) {
+        gameService.leaveGame(command);
         broadcast(gameId);
     }
 
