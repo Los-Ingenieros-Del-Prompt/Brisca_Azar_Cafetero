@@ -10,6 +10,7 @@ import com.aguardientes.azarcafetero.domain.service.GameRules;
 import com.aguardientes.azarcafetero.domain.service.ScoreCalculator;
 import com.aguardientes.azarcafetero.domain.service.TrickResolver;
 import com.aguardientes.azarcafetero.infrastructure.wallet.HttpWalletClient;
+import com.aguardientes.azarcafetero.infrastructure.wallet.NoOpWalletClient;
 import org.springframework.beans.factory.annotation.Value;
 
 import org.springframework.context.annotation.Bean;
@@ -39,10 +40,14 @@ public class BriscaApplicationConfig {
     @Bean
     public WalletClient walletClient(
             @Value("${lobby.service.url}") String lobbyServiceUrl,
-            @Value("${internal.api.key}") String internalApiKey) {
+            @Value("${internal.api.key:}") String internalApiKey) {
 
+        if (internalApiKey == null || internalApiKey.isBlank()) {
+            org.slf4j.LoggerFactory.getLogger(BriscaApplicationConfig.class)
+                    .warn("INTERNAL_API_KEY vacía → usando NoOpWalletClient (apuestas no se registran)");
+            return new NoOpWalletClient();
+        }
         return new HttpWalletClient(lobbyServiceUrl, internalApiKey);
-
     }
 
     @Bean

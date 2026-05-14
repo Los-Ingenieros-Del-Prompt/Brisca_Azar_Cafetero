@@ -263,8 +263,10 @@
             });
         }
 
-        if (state.state === 'FINISHED' && state.winner) {
-            html += '<br>🏆 <b>GANADOR: ' + state.winner.name + '</b>';
+        if (state.state === 'FINISHED' && state.winners && state.winners.length > 0) {
+            const names = state.winners.map(w => w.name).join(', ');
+            const label = state.winners.length > 1 ? 'GANADORES (empate)' : 'GANADOR';
+            html += '<br>🏆 <b>' + label + ': ' + names + '</b>';
         }
 
         el.innerHTML = html;
