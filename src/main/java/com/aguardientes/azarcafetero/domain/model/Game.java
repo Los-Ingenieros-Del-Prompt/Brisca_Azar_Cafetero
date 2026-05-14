@@ -63,6 +63,25 @@ public class Game {
         }
     }
 
+    public synchronized void removePlayer(String playerId) {
+        synchronized (playerLock) {
+            Player player = getPlayerById(playerId);
+            if (player != null) {
+                int index = players.indexOf(player);
+                players.remove(player);
+                if (players.isEmpty()) {
+                    currentPlayerIndex = 0;
+                } else {
+                    if (index < currentPlayerIndex) {
+                        currentPlayerIndex--;
+                    } else if (currentPlayerIndex >= players.size()) {
+                        currentPlayerIndex = 0;
+                    }
+                }
+            }
+        }
+    }
+
     public void start() {
         if (players.size() < minPlayers) {
             throw new IllegalStateException("Not enough players to start game. Minimum: " + minPlayers);
