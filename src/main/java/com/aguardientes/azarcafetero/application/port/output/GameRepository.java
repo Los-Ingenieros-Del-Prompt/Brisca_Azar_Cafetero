@@ -10,7 +10,7 @@ public interface GameRepository {
     
     Optional<Game> findById(String gameId);
     
-    void delete(String gameId);
+    void deleteById(String gameId);
     
     boolean exists(String gameId);
 }

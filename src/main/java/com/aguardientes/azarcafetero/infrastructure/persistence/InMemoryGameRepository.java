@@ -26,7 +26,7 @@ public class InMemoryGameRepository implements GameRepository {
     }
 
     @Override
-    public void delete(String gameId) {
+    public void deleteById(String gameId) {
         games.remove(gameId);
     }
 
