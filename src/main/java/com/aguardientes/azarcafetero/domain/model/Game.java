@@ -146,7 +146,8 @@ public class Game {
     }
 
     public boolean isGameOver() {
-        return deck.isEmpty() && players.stream().noneMatch(Player::hasCards);
+        boolean deckExhausted = deck.isEmpty() || deck.remainingCards() < players.size();
+        return deckExhausted && players.stream().noneMatch(Player::hasCards);
     }
 
     public void finish() { state = GameState.FINISHED; }
