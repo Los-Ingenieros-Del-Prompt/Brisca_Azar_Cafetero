@@ -11,33 +11,45 @@
 	<groupId>com.aguardientes</groupId>
 	<artifactId>azarcafetero</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name/>
-	<description/>
-	<url/>
-	<licenses><license/></licenses>
-	<developers><developer/></developers>
-	<scm>
-		<connection/><developerConnection/><tag/><url/>
-	</scm>
+
 	<properties>
 		<java.version>21</java.version>
+		<!-- SonarQube / SonarCloud -->
+		<sonar.projectKey>azar-cafetero_brisca</sonar.projectKey>
+		<sonar.organization>azar-cafetero</sonar.organization>
+		<sonar.host.url>https://sonarcloud.io</sonar.host.url>
+		<sonar.coverage.jacoco.xmlReportPaths>
+			${project.build.directory}/site/jacoco/jacoco.xml
+		</sonar.coverage.jacoco.xmlReportPaths>
+		<!-- Excluye clases que no aportan lógica de negocio -->
+		<sonar.exclusions>
+			**/AzarcafeteroApplication.java,
+			**/infrastructure/config/**,
+			**/infrastructure/websocket/WebSocketConfig.java,
+			**/infrastructure/websocket/WebSocketEventListener.java,
+			**/*Exception.java,
+			**/dto/**,
+			**/model/GameState.java,
+			**/model/BotDifficulty.java,
+			**/model/Suit.java,
+			**/model/Rank.java
+		</sonar.exclusions>
+		<sonar.coverage.exclusions>${sonar.exclusions}</sonar.coverage.exclusions>
 	</properties>
+
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter</artifactId>
 		</dependency>
-
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-websocket</artifactId>
 		</dependency>
-
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
-
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
@@ -50,6 +62,73 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+			</plugin>
+
+			<!-- JaCoCo: cobertura de código -->
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>0.8.12</version>
+				<executions>
+					<!-- Instrumentación antes de los tests -->
+					<execution>
+						<id>prepare-agent</id>
+						<goals><goal>prepare-agent</goal></goals>
+					</execution>
+					<!-- Reporte XML (lo lee SonarQube) -->
+					<execution>
+						<id>report</id>
+						<phase>verify</phase>
+						<goals><goal>report</goal></goals>
+					</execution>
+					<!-- Falla el build si cobertura < 80% -->
+					<execution>
+						<id>check</id>
+						<phase>verify</phase>
+						<goals><goal>check</goal></goals>
+						<configuration>
+							<rules>
+								<rule>
+									<element>BUNDLE</element>
+									<limits>
+										<limit>
+											<counter>LINE</counter>
+											<value>COVEREDRATIO</value>
+											<minimum>0.80</minimum>
+										</limit>
+										<limit>
+											<counter>BRANCH</counter>
+											<value>COVEREDRATIO</value>
+											<minimum>0.80</minimum>
+										</limit>
+									</limits>
+								</rule>
+							</rules>
+							<!-- Mismas exclusiones que Sonar -->
+							<excludes>
+								<exclude>com/aguardientes/azarcafetero/AzarcafeteroApplication.class</exclude>
+								<exclude>com/aguardientes/azarcafetero/infrastructure/config/**</exclude>
+								<exclude>com/aguardientes/azarcafetero/infrastructure/websocket/WebSocketConfig.class</exclude>
+								<exclude>com/aguardientes/azarcafetero/infrastructure/websocket/WebSocketEventListener.class</exclude>
+								<exclude>com/aguardientes/azarcafetero/infrastructure/wallet/HttpWalletClient.class</exclude>
+								<exclude>com/aguardientes/azarcafetero/infrastructure/wallet/WalletOperationException.class</exclude>
+								<exclude>com/aguardientes/azarcafetero/domain/exception/**</exclude>
+								<exclude>com/aguardientes/azarcafetero/application/dto/**</exclude>
+								<exclude>com/aguardientes/azarcafetero/domain/model/GameState.class</exclude>
+								<exclude>com/aguardientes/azarcafetero/domain/model/BotDifficulty.class</exclude>
+								<exclude>com/aguardientes/azarcafetero/domain/model/Suit.class</exclude>
+								<exclude>com/aguardientes/azarcafetero/domain/model/Rank.class</exclude>
+							</excludes>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- SonarQube scanner -->
+			<plugin>
+				<groupId>org.sonarsource.scanner.maven</groupId>
+				<artifactId>sonar-maven-plugin</artifactId>
+				<version>4.0.0.4121</version>
 			</plugin>
 		</plugins>
 	</build>
