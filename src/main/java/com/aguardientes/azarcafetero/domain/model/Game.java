@@ -129,6 +129,12 @@ public class Game {
     }
 
     private void drawCardsAfterTrick(String winnerPlayerId) {
+        // Solo repartir si hay suficientes cartas para TODOS los jugadores
+        // Si no alcanza para todos, nadie recibe carta (regla Brisca)
+        if (deck.remainingCards() < players.size()) {
+            return; // cartas sobrantes — no se reparten
+        }
+
         Player winner = getPlayerById(winnerPlayerId);
         int winnerIndex = players.indexOf(winner);
         for (int i = 0; i < players.size(); i++) {
