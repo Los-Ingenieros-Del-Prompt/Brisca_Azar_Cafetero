@@ -70,7 +70,11 @@ public class BriscaWebSocketController {
     @MessageMapping("/game/{gameId}/leave")
     public void leaveGame(LeaveGameCommand command, @DestinationVariable String gameId) {
         gameService.leaveGame(command);
-        broadcast(gameId);
+        try {
+            broadcast(gameId);
+        } catch (Exception ignored) {
+            // Game was deleted when last player left — nothing to broadcast
+        }
     }
 
     @MessageMapping("/game/{gameId}/start")
