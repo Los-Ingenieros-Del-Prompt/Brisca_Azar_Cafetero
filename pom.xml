@@ -69,6 +69,23 @@
 				<groupId>org.jacoco</groupId>
 				<artifactId>jacoco-maven-plugin</artifactId>
 				<version>0.8.12</version>
+				<configuration>
+					<!-- Mismas exclusiones que Sonar -->
+					<excludes>
+						<exclude>com/aguardientes/azarcafetero/AzarcafeteroApplication.class</exclude>
+						<exclude>com/aguardientes/azarcafetero/infrastructure/config/**</exclude>
+						<exclude>com/aguardientes/azarcafetero/infrastructure/websocket/WebSocketConfig.class</exclude>
+						<exclude>com/aguardientes/azarcafetero/infrastructure/websocket/WebSocketEventListener.class</exclude>
+						<exclude>com/aguardientes/azarcafetero/infrastructure/wallet/HttpWalletClient.class</exclude>
+						<exclude>com/aguardientes/azarcafetero/infrastructure/wallet/WalletOperationException.class</exclude>
+						<exclude>com/aguardientes/azarcafetero/domain/exception/**</exclude>
+						<exclude>com/aguardientes/azarcafetero/application/dto/**</exclude>
+						<exclude>com/aguardientes/azarcafetero/domain/model/GameState.class</exclude>
+						<exclude>com/aguardientes/azarcafetero/domain/model/BotDifficulty.class</exclude>
+						<exclude>com/aguardientes/azarcafetero/domain/model/Suit.class</exclude>
+						<exclude>com/aguardientes/azarcafetero/domain/model/Rank.class</exclude>
+					</excludes>
+				</configuration>
 				<executions>
 					<!-- Instrumentación antes de los tests -->
 					<execution>
@@ -104,21 +121,6 @@
 									</limits>
 								</rule>
 							</rules>
-							<!-- Mismas exclusiones que Sonar -->
-							<excludes>
-								<exclude>com/aguardientes/azarcafetero/AzarcafeteroApplication.class</exclude>
-								<exclude>com/aguardientes/azarcafetero/infrastructure/config/**</exclude>
-								<exclude>com/aguardientes/azarcafetero/infrastructure/websocket/WebSocketConfig.class</exclude>
-								<exclude>com/aguardientes/azarcafetero/infrastructure/websocket/WebSocketEventListener.class</exclude>
-								<exclude>com/aguardientes/azarcafetero/infrastructure/wallet/HttpWalletClient.class</exclude>
-								<exclude>com/aguardientes/azarcafetero/infrastructure/wallet/WalletOperationException.class</exclude>
-								<exclude>com/aguardientes/azarcafetero/domain/exception/**</exclude>
-								<exclude>com/aguardientes/azarcafetero/application/dto/**</exclude>
-								<exclude>com/aguardientes/azarcafetero/domain/model/GameState.class</exclude>
-								<exclude>com/aguardientes/azarcafetero/domain/model/BotDifficulty.class</exclude>
-								<exclude>com/aguardientes/azarcafetero/domain/model/Suit.class</exclude>
-								<exclude>com/aguardientes/azarcafetero/domain/model/Rank.class</exclude>
-							</excludes>
 						</configuration>
 					</execution>
 				</executions>
