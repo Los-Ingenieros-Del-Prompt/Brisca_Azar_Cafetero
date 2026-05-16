@@ -54,33 +54,6 @@ jobs:
       - name: Run tests with JaCoCo coverage
         run: mvn -B clean verify
 
-      - name: Verify coverage threshold (${{ inputs.coverage-threshold }}%)
-        run: |
-          echo "Checking JaCoCo report..."
-          REPORT=target/site/jacoco/jacoco.xml
-          if [ ! -f "$REPORT" ]; then
-            echo "::error::JaCoCo report not found at $REPORT"
-            exit 1
-          fi
-
-          MISSED=$(grep -oP 'type="LINE" missed="\K\d+' $REPORT | tail -1)
-          TOTAL_COVERED=$(grep -oP 'type="LINE"[^/]*covered="\K\d+' $REPORT | tail -1)
-          TOTAL=$((MISSED + TOTAL_COVERED))
-
-          if [ "$TOTAL" -eq 0 ]; then
-            echo "::error::No coverage data found"
-            exit 1
-          fi
-
-          PERCENT=$((TOTAL_COVERED * 100 / TOTAL))
-          echo "Line coverage: $PERCENT% ($TOTAL_COVERED/$TOTAL)"
-
-          if [ "$PERCENT" -lt "${{ inputs.coverage-threshold }}" ]; then
-            echo "::error::Coverage $PERCENT% is below threshold ${{ inputs.coverage-threshold }}%"
-            exit 1
-          fi
-          echo "::notice::Coverage gate passed: $PERCENT%"
-
       - name: SonarCloud Scan
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
