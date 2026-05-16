@@ -299,8 +299,10 @@ class GameTest {
     }
 
     private String resolveWithFirstPlayer() {
-        String winnerId = "P1";
+        TrickResolver trickResolver = new TrickResolver();
+        String winnerId = trickResolver.resolveWinner(game.getCurrentTrick());
         game.resolveTrick(winnerId);
+        assertThat(game.getCurrentPlayer().getId()).isEqualTo(winnerId);
         return winnerId;
     }
 }
