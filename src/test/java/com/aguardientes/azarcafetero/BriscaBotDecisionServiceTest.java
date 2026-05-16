@@ -5,17 +5,10 @@ import com.aguardientes.azarcafetero.domain.service.BriscaBotDecisionService;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-
 import java.math.BigDecimal;
 import java.util.Random;
-
 import static org.assertj.core.api.Assertions.*;
 
-/**
- * Tests unitarios del algoritmo de decisión del bot de Brisca.
- *
- * No necesita Spring — solo dominio puro.
- */
 @DisplayName("BriscaBotDecisionService")
 class BriscaBotDecisionServiceTest {
 
@@ -24,300 +17,229 @@ class BriscaBotDecisionServiceTest {
 
     private BriscaBotDecisionService service;
 
-    @BeforeEach
-    void setUp() {
-        service = new BriscaBotDecisionService(new Random(42)); // seed fijo para reproducibilidad
+    @BeforeEach void setUp() {
+        service = new BriscaBotDecisionService(new Random(42));
     }
 
-    // ─── Validaciones básicas ─────────────────────────────────────────────────
+    // ── Validaciones básicas ──────────────────────────────────────────────────
 
-    @Test
-    @DisplayName("Siempre devuelve una carta válida que está en la mano del bot")
-    void decide_returnsCardFromHand() {
+    @Test void decide_returnsCardFromHand() {
         Game game = buildGame(BOT_ID,
                 card(Suit.OROS, Rank.ACE),
                 card(Suit.COPAS, Rank.TWO),
                 card(Suit.ESPADAS, Rank.KING));
-
-        Card result = service.decide(game, BOT_ID, BotDifficulty.MEDIUM);
-
-        assertThat(game.getPlayerById(BOT_ID).getHand()).contains(result);
+        assertThat(game.getPlayerById(BOT_ID).getHand())
+                .contains(service.decide(game, BOT_ID, BotDifficulty.MEDIUM));
     }
 
     @ParameterizedTest
-    @DisplayName("Con una sola carta siempre devuelve esa carta (todos los niveles)")
     @EnumSource(BotDifficulty.class)
-    void decide_singleCard_returnsIt(BotDifficulty difficulty) {
+    void decide_singleCard_returnsIt(BotDifficulty d) {
         Game game = buildGame(BOT_ID, card(Suit.COPAS, Rank.THREE));
-
-        Card result = service.decide(game, BOT_ID, difficulty);
-
-        assertThat(result).isEqualTo(card(Suit.COPAS, Rank.THREE));
+        assertThat(service.decide(game, BOT_ID, d)).isEqualTo(card(Suit.COPAS, Rank.THREE));
     }
 
-    @Test
-    @DisplayName("Lanza excepción si el bot no está en la partida")
-    void decide_botNotInGame_throws() {
-        Game game = buildGame("HUMAN_1", card(Suit.BASTOS, Rank.SEVEN));
+    @ParameterizedTest
+    @EnumSource(BotDifficulty.class)
+    void decide_neverReturnsNull(BotDifficulty d) {
+        Game game = buildGame(BOT_ID, card(Suit.OROS, Rank.ACE), card(Suit.COPAS, Rank.THREE));
+        assertThat(service.decide(game, BOT_ID, d)).isNotNull();
+    }
 
-        assertThatThrownBy(() -> service.decide(game, "BOT_EASY_unknown", BotDifficulty.EASY))
+    @Test void decide_botNotInGame_throws() {
+        Game game = buildGame("HUMAN_1", card(Suit.BASTOS, Rank.SEVEN));
+        assertThatThrownBy(() -> service.decide(game, "BOT_EASY_x", BotDifficulty.EASY))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
-    // ─── EASY ─────────────────────────────────────────────────────────────────
+    @Test void decide_emptyHand_throws() {
+        Game game = buildGame(BOT_ID); // sin cartas
+        forceInProgress(game, TRUMP);
+        assertThatThrownBy(() -> service.decide(game, BOT_ID, BotDifficulty.HARD))
+                .isInstanceOf(IllegalStateException.class);
+    }
 
-    @Test
-    @DisplayName("EASY: carta devuelta pertenece a la mano (no falla)")
-    void easyBot_alwaysReturnsValidCard() {
+    // ── EASY ──────────────────────────────────────────────────────────────────
+
+    @Test void easy_alwaysReturnsValidCard() {
         for (int i = 0; i < 20; i++) {
             Game game = buildGame(BOT_ID,
                     card(Suit.OROS, Rank.ACE),
                     card(Suit.COPAS, Rank.FIVE),
                     card(Suit.ESPADAS, Rank.JACK));
-            Card result = service.decide(game, BOT_ID, BotDifficulty.EASY);
-            assertThat(game.getPlayerById(BOT_ID).getHand()).contains(result);
+            assertThat(game.getPlayerById(BOT_ID).getHand())
+                    .contains(service.decide(game, BOT_ID, BotDifficulty.EASY));
         }
     }
 
-    // ─── MEDIUM: lidera la baza ───────────────────────────────────────────────
+    // ── MEDIUM — liderando ────────────────────────────────────────────────────
 
-    @Test
-    @DisplayName("MEDIUM liderando: juega la carta más barata (sin puntos, sin triunfo)")
-    void mediumBot_leading_playsLowestNonTrumpZeroPoints() {
+    @Test void medium_leading_playsLowestNonTrump() {
         Game game = buildGame(BOT_ID,
-                card(Suit.BASTOS, Rank.FIVE),    // 0 pts, no triunfo  ← esperada
-                card(Suit.COPAS, Rank.ACE),      // 11 pts, no triunfo
-                card(Suit.OROS, Rank.TWO));      // 0 pts, TRIUNFO
-
+                card(Suit.BASTOS, Rank.FIVE),  // 0 pts, no trump ← esperada
+                card(Suit.COPAS, Rank.ACE),    // 11 pts
+                card(Suit.OROS, Rank.TWO));    // trump
         Card result = service.decide(game, BOT_ID, BotDifficulty.MEDIUM);
-
-        // Debe elegir BASTOS-FIVE (sin puntos, no triunfo) sobre OROS-TWO (triunfo)
         assertThat(result.getSuit()).isNotEqualTo(TRUMP);
         assertThat(result.getPoints()).isEqualTo(0);
     }
 
-    // ─── MEDIUM: sigue la baza ────────────────────────────────────────────────
-
-    @Test
-    @DisplayName("MEDIUM siguiendo: gana con la carta mínima del mismo palo si puede")
-    void mediumBot_following_winsWithMinimumSameSuit() {
-        Game game = buildGameWithTrick(BOT_ID,
-                new Card[]{
-                        card(Suit.BASTOS, Rank.FIVE),    // 0 pts
-                        card(Suit.BASTOS, Rank.KING),    // 4 pts  ← gana con mínimo sobre SEVEN
-                        card(Suit.BASTOS, Rank.ACE),     // 11 pts
-                        card(Suit.OROS, Rank.TWO),       // triunfo
-                },
-                "HUMAN_1", card(Suit.BASTOS, Rank.SEVEN)  // rival jugó SEVEN de BASTOS
-        );
-
+    @Test void medium_leading_onlyTrumps_usesLowestTrump() {
+        Game game = buildGame(BOT_ID,
+                card(Suit.OROS, Rank.ACE),
+                card(Suit.OROS, Rank.THREE));
         Card result = service.decide(game, BOT_ID, BotDifficulty.MEDIUM);
-
-        // KING (valor 12) gana sobre SEVEN (valor 7); ACE (valor 1 numérico) NO gana sobre 7
-        // Espera KING que es el mínimo que supera al SEVEN en valor numérico
-        assertThat(result).isEqualTo(card(Suit.BASTOS, Rank.KING));
-    }
-
-    @Test
-    @DisplayName("MEDIUM siguiendo: descarta la más barata si no puede ganar la baza")
-    void mediumBot_following_discardsLowestWhenCantWin() {
-        Game game = buildGameWithTrick(BOT_ID,
-                new Card[]{
-                        card(Suit.COPAS, Rank.TWO),      // 0 pts
-                        card(Suit.ESPADAS, Rank.FOUR),   // 0 pts
-                        card(Suit.COPAS, Rank.FIVE),     // 0 pts
-                },
-                "HUMAN_1", card(Suit.OROS, Rank.ACE)    // rival jugó triunfo máximo
-        );
-
-        Card result = service.decide(game, BOT_ID, BotDifficulty.MEDIUM);
-
-        // No puede ganar (no tiene triunfos ni supera el ACE de OROS)
-        // Debe descartar una carta de 0 puntos
-        assertThat(result.getPoints()).isEqualTo(0);
-    }
-
-    @Test
-    @DisplayName("MEDIUM siguiendo: usa triunfo si la baza tiene >= 5 puntos y no puede ganar con mismo palo")
-    void mediumBot_following_usesTrumpWhenTrickIsWorthIt() {
-        // Rival jugó COPAS-THREE (10 pts, numericValue=3).
-        // Bot tiene COPAS-TWO (numericValue=2) — NO supera al THREE (2 < 3).
-        // Como no puede ganar mismo palo y la baza vale 10 pts (>= 5), usa el triunfo.
-        Game game = buildGameWithTrick(BOT_ID,
-                new Card[]{
-                        card(Suit.OROS, Rank.TWO),       // triunfo (0 pts)
-                        card(Suit.COPAS, Rank.TWO),      // 0 pts, numericValue=2, NO gana sobre THREE
-                },
-                "HUMAN_1", card(Suit.COPAS, Rank.THREE) // rival jugó 10 puntos, numericValue=3
-        );
-
-        Card result = service.decide(game, BOT_ID, BotDifficulty.MEDIUM);
-
-        // Bot no puede ganar con COPAS-TWO (2 < 3).
-        // Baza vale 10 pts (>= 5): debe usar el triunfo OROS-TWO.
         assertThat(result.getSuit()).isEqualTo(TRUMP);
     }
 
-    @Test
-    @DisplayName("MEDIUM siguiendo: NO usa triunfo si la baza tiene < 5 puntos")
-    void mediumBot_following_doesNotUseTrumpForCheapTrick() {
-        // OROS-FOUR (trump, numericValue=2) vs COPAS-TWO (no trump, numericValue=1)
-        // Descarta por menor numericValue → elige COPAS-TWO, no el triunfo
+    // ── MEDIUM — siguiendo ────────────────────────────────────────────────────
+
+    @Test void medium_following_winsWithMinSameSuit() {
         Game game = buildGameWithTrick(BOT_ID,
                 new Card[]{
-                        card(Suit.OROS,  Rank.FOUR),     // triunfo (0 pts), numericValue=2
-                        card(Suit.COPAS, Rank.TWO),      // 0 pts, numericValue=1 ← se descarta
-                },
-                "HUMAN_1", card(Suit.COPAS, Rank.FOUR)  // rival jugó 0 puntos
-        );
-        Card result = service.decide(game, BOT_ID, BotDifficulty.MEDIUM);
-        // Baza vale 0 pts (<5): descarta la más barata por valor numérico (COPAS-TWO)
-        assertThat(result.getSuit()).isNotEqualTo(TRUMP);
+                        card(Suit.BASTOS, Rank.FIVE),
+                        card(Suit.BASTOS, Rank.KING),  // ← gana sobre SEVEN
+                        card(Suit.BASTOS, Rank.ACE),
+                        card(Suit.OROS, Rank.TWO)},
+                "HUMAN_1", card(Suit.BASTOS, Rank.SEVEN));
+        assertThat(service.decide(game, BOT_ID, BotDifficulty.MEDIUM))
+                .isEqualTo(card(Suit.BASTOS, Rank.KING));
     }
 
-    // ─── HARD: liderando ──────────────────────────────────────────────────────
+    @Test void medium_following_discardsLowestWhenCantWin() {
+        Game game = buildGameWithTrick(BOT_ID,
+                new Card[]{
+                        card(Suit.COPAS, Rank.TWO),
+                        card(Suit.ESPADAS, Rank.FOUR),
+                        card(Suit.COPAS, Rank.FIVE)},
+                "HUMAN_1", card(Suit.OROS, Rank.ACE)); // trump máximo
+        assertThat(service.decide(game, BOT_ID, BotDifficulty.MEDIUM).getPoints()).isEqualTo(0);
+    }
 
-    @Test
-    @DisplayName("HARD liderando y perdiendo: conserva el triunfo, no lo desperdicia")
-    void hardBot_leading_losing_doesNotWasteTrump() {
+    @Test void medium_following_usesTrumpWhenTrickWorthIt() {
+        Game game = buildGameWithTrick(BOT_ID,
+                new Card[]{
+                        card(Suit.OROS, Rank.TWO),    // trump
+                        card(Suit.COPAS, Rank.TWO)},  // numValue=1, no gana sobre THREE (numValue=3)
+                "HUMAN_1", card(Suit.COPAS, Rank.THREE)); // 10 pts
+        assertThat(service.decide(game, BOT_ID, BotDifficulty.MEDIUM).getSuit()).isEqualTo(TRUMP);
+    }
+
+    @Test void medium_following_doesNotUseTrumpForCheapTrick() {
+        // COPAS-TWO (numValue=1) es más barato que OROS-FOUR (numValue=2)
+        Game game = buildGameWithTrick(BOT_ID,
+                new Card[]{
+                        card(Suit.OROS,  Rank.FOUR),  // trump, numValue=2
+                        card(Suit.COPAS, Rank.TWO)},  // numValue=1 ← se descarta
+                "HUMAN_1", card(Suit.COPAS, Rank.FOUR));
+        assertThat(service.decide(game, BOT_ID, BotDifficulty.MEDIUM).getSuit()).isNotEqualTo(TRUMP);
+    }
+
+    // ── HARD — liderando ──────────────────────────────────────────────────────
+
+    @Test void hard_leading_losing_doesNotWasteTrump() {
         Game game = buildGameWithScores(BOT_ID, 0, "HUMAN_1", 15,
                 new Card[]{
                         card(Suit.COPAS, Rank.ACE),
                         card(Suit.BASTOS, Rank.TWO),
-                        card(Suit.OROS, Rank.SEVEN),  // triunfo
-                });
-        Card result = service.decide(game, BOT_ID, BotDifficulty.HARD);
-        // Minimax penaliza fuertemente jugar triunfo al liderar — nunca debe jugarlo
-        assertThat(result.getSuit()).isNotEqualTo(TRUMP);
+                        card(Suit.OROS, Rank.SEVEN)});  // trump
+        assertThat(service.decide(game, BOT_ID, BotDifficulty.HARD).getSuit())
+                .isNotEqualTo(TRUMP);
     }
 
-    @Test
-    @DisplayName("HARD liderando y ganando: juega conservador (carta barata sin triunfo)")
-    void hardBot_leading_winning_playsConservatively() {
-        // Bot tiene 20 puntos, rival tiene 5 → está ganando
+    @Test void hard_leading_winning_playsConservatively() {
         Game game = buildGameWithScores(BOT_ID, 20, "HUMAN_1", 5,
                 new Card[]{
-                        card(Suit.COPAS, Rank.ACE),      // 11 pts
-                        card(Suit.BASTOS, Rank.TWO),     // 0 pts ← esperada
-                        card(Suit.OROS, Rank.SEVEN),     // triunfo
-                });
-
+                        card(Suit.COPAS, Rank.ACE),
+                        card(Suit.BASTOS, Rank.TWO),  // ← esperada
+                        card(Suit.OROS, Rank.SEVEN)});
         Card result = service.decide(game, BOT_ID, BotDifficulty.HARD);
-
         assertThat(result.getPoints()).isEqualTo(0);
         assertThat(result.getSuit()).isNotEqualTo(TRUMP);
     }
 
-    // ─── La carta devuelta nunca es nula ─────────────────────────────────────
-
-    @ParameterizedTest
-    @EnumSource(BotDifficulty.class)
-    @DisplayName("Nunca devuelve null en ningún nivel de dificultad")
-    void decide_neverReturnsNull(BotDifficulty difficulty) {
-        Game game = buildGame(BOT_ID,
-                card(Suit.OROS, Rank.ACE),
-                card(Suit.COPAS, Rank.THREE));
-
-        assertThat(service.decide(game, BOT_ID, difficulty)).isNotNull();
+    @Test void hard_leading_tied_returnsValidCard() {
+        Game game = buildGameWithScores(BOT_ID, 10, "HUMAN_1", 10,
+                new Card[]{card(Suit.COPAS, Rank.ACE), card(Suit.BASTOS, Rank.TWO)});
+        assertThat(service.decide(game, BOT_ID, BotDifficulty.HARD)).isNotNull();
     }
 
-    // ─── Builders de test ────────────────────────────────────────────────────
+    // ── HARD — siguiendo ──────────────────────────────────────────────────────
 
-    private static Card card(Suit suit, Rank rank) {
-        return new Card(suit, rank);
+    @Test void hard_following_returnsCardFromHand() {
+        Game game = buildGameWithTrick(BOT_ID,
+                new Card[]{
+                        card(Suit.OROS, Rank.ACE),
+                        card(Suit.COPAS, Rank.THREE),
+                        card(Suit.BASTOS, Rank.FIVE)},
+                "HUMAN_1", card(Suit.COPAS, Rank.ACE));
+        Card result = service.decide(game, BOT_ID, BotDifficulty.HARD);
+        assertThat(game.getPlayerById(BOT_ID).getHand()).contains(result);
     }
 
-    /**
-     * Crea una partida mínima con el bot como jugador activo (lidera la baza).
-     */
+    // ── builders ──────────────────────────────────────────────────────────────
+
+    private static Card card(Suit s, Rank r) { return new Card(s, r); }
+
     private Game buildGame(String playerId, Card... cards) {
-        Game game = new Game("TEST_GAME", 1, 4, BigDecimal.ONE);
-        Player player = new Player(playerId, "Bot");
-        game.addPlayer(player);
-        // Inyecta cartas directamente en la mano
-        for (Card c : cards) player.addCard(c);
-        // Simula estado IN_PROGRESS sin repartir (para no alterar las cartas)
+        Game game = new Game("T", 1, 4, BigDecimal.ONE);
+        Player p = new Player(playerId, "Bot");
+        game.addPlayer(p);
+        for (Card c : cards) p.addCard(c);
         forceInProgress(game, TRUMP);
         return game;
     }
 
-    /**
-     * Crea una partida donde el rival ya jugó una carta (bot sigue).
-     */
     private Game buildGameWithTrick(String botId, Card[] botCards,
                                     String rivalId, Card rivalCard) {
-        Game game = new Game("TEST_GAME", 2, 4, BigDecimal.ONE);
-
+        Game game = new Game("T", 2, 4, BigDecimal.ONE);
         Player rival = new Player(rivalId, "Human");
         rival.addCard(rivalCard);
         game.addPlayer(rival);
-
         Player bot = new Player(botId, "Bot");
         for (Card c : botCards) bot.addCard(c);
         game.addPlayer(bot);
-
         forceInProgress(game, TRUMP);
-
-        // El rival lidera: juega su carta (avanza el índice al bot)
         rival.playCard(rivalCard);
         game.getCurrentTrick().addCard(rivalId, rivalCard);
-
-        // Forzamos que el turno sea del bot
         forceCurrentPlayerIndex(game, 1);
-
         return game;
     }
 
-    /**
-     * Crea una partida con puntuaciones definidas para probar estrategia ganando/perdiendo.
-     */
     private Game buildGameWithScores(String botId, int botScore,
-                                     String rivalId, int rivalScore,
-                                     Card[] botCards) {
-        Game game = new Game("TEST_GAME", 2, 4, BigDecimal.ONE);
-
+                                     String rivalId, int rivalScore, Card[] botCards) {
+        Game game = new Game("T", 2, 4, BigDecimal.ONE);
         Player rival = new Player(rivalId, "Human");
         rival.addPoints(rivalScore);
         game.addPlayer(rival);
-
         Player bot = new Player(botId, "Bot");
         bot.addPoints(botScore);
         for (Card c : botCards) bot.addCard(c);
         game.addPlayer(bot);
-
         forceInProgress(game, TRUMP);
-        forceCurrentPlayerIndex(game, 1); // bot lidera
+        forceCurrentPlayerIndex(game, 1);
         return game;
     }
 
-    // ─── Helpers de reflexión para forzar estado interno ─────────────────────
-
     private void forceInProgress(Game game, Suit trump) {
         try {
-            var stateField = Game.class.getDeclaredField("state");
-            stateField.setAccessible(true);
-            stateField.set(game, GameState.IN_PROGRESS);
-
-            // Forzar trump suit a través del deck
-            var deckField = Game.class.getDeclaredField("deck");
-            deckField.setAccessible(true);
-            Object deck = deckField.get(game);
-
-            var trumpCardField = deck.getClass().getDeclaredField("trumpCard");
-            trumpCardField.setAccessible(true);
-            trumpCardField.set(deck, new Card(trump, Rank.SEVEN));
-        } catch (Exception e) {
-            throw new RuntimeException("Test setup failed", e);
-        }
+            var sf = Game.class.getDeclaredField("state");
+            sf.setAccessible(true);
+            sf.set(game, GameState.IN_PROGRESS);
+            var df = Game.class.getDeclaredField("deck");
+            df.setAccessible(true);
+            Object deck = df.get(game);
+            var tf = deck.getClass().getDeclaredField("trumpCard");
+            tf.setAccessible(true);
+            tf.set(deck, new Card(trump, Rank.SEVEN));
+        } catch (Exception e) { throw new RuntimeException(e); }
     }
 
     private void forceCurrentPlayerIndex(Game game, int index) {
         try {
-            var field = Game.class.getDeclaredField("currentPlayerIndex");
-            field.setAccessible(true);
-            field.set(game, index);
-        } catch (Exception e) {
-            throw new RuntimeException("Test setup failed", e);
-        }
+            var f = Game.class.getDeclaredField("currentPlayerIndex");
+            f.setAccessible(true);
+            f.set(game, index);
+        } catch (Exception e) { throw new RuntimeException(e); }
     }
 }

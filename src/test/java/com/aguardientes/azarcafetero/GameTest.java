@@ -305,4 +305,83 @@ class GameTest {
         assertThat(game.getCurrentPlayer().getId()).isEqualTo(winnerId);
         return winnerId;
     }
+
+    @Test void removePlayer_indexEqualsCurrentPlayer_doesNotThrow() {
+        game.addPlayer(p1);
+        game.addPlayer(p2);
+        game.addPlayer(new Player("P3", "Charlie"));
+        assertThatCode(() -> game.removePlayer("P1")).doesNotThrowAnyException();
+        assertThat(game.getPlayerCount()).isEqualTo(2);
+    }
+
+    @Test void removePlayer_indexLessThanCurrent_decrementsIndex() {
+        game.addPlayer(p1);
+        game.addPlayer(p2);
+        game.addPlayer(new Player("P3", "Charlie"));
+        setCurrentPlayerIndex(game, 2);
+        game.removePlayer("P1");
+        assertThat(game.getCurrentPlayerIndex()).isEqualTo(1);
+    }
+
+    @Test void removePlayer_currentIndexOutOfBounds_resetsToZero() {
+        game.addPlayer(p1);
+        game.addPlayer(p2);
+        setCurrentPlayerIndex(game, 1);
+        game.removePlayer("P2");
+        assertThat(game.getCurrentPlayerIndex()).isEqualTo(0);
+    }
+
+    // ── isGameOver ────────────────────────────────────────────────────────────
+
+    @Test void isGameOver_deckNotExhausted_returnsFalse() {
+        game.addPlayer(p1);
+        game.addPlayer(p2);
+        game.start();
+        assertThat(game.isGameOver()).isFalse();
+    }
+
+    @Test void isGameOver_deckEmptyButPlayersHaveCards_returnsFalse() {
+        game.addPlayer(p1);
+        game.addPlayer(p2);
+        p1.addCard(new Card(Suit.OROS, Rank.ACE));
+        p2.addCard(new Card(Suit.COPAS, Rank.ACE));
+        drainDeck(game);
+        assertThat(game.isGameOver()).isFalse();
+    }
+
+    // ── nulls / edge ──────────────────────────────────────────────────────────
+
+    @Test void getCurrentPlayer_emptyPlayers_returnsNull() {
+        assertThat(new Game("G1", 2, 4, BigDecimal.TEN).getCurrentPlayer()).isNull();
+    }
+
+    @Test void isPlayerTurn_noPlayers_returnsFalse() {
+        assertThat(new Game("G1", 2, 4, BigDecimal.TEN).isPlayerTurn("P1")).isFalse();
+    }
+
+    @Test void nullBetAmount_throws() {
+        assertThatNullPointerException()
+                .isThrownBy(() -> new Game("G1", 2, 4, null));
+    }
+
+    // ── helpers privados ──────────────────────────────────────────────────────
+
+    private void setCurrentPlayerIndex(Game game, int index) {
+        try {
+            var f = Game.class.getDeclaredField("currentPlayerIndex");
+            f.setAccessible(true);
+            f.set(game, index);
+        } catch (Exception e) { throw new RuntimeException(e); }
+    }
+
+    private void drainDeck(Game game) {
+        try {
+            var df = Game.class.getDeclaredField("deck");
+            df.setAccessible(true);
+            Object deck = df.get(game);
+            var cf = deck.getClass().getDeclaredField("cards");
+            cf.setAccessible(true);
+            ((java.util.List<?>) cf.get(deck)).clear();
+        } catch (Exception e) { throw new RuntimeException(e); }
+    }
 }

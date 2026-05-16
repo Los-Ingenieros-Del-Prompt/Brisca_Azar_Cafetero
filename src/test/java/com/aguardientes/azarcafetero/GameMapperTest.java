@@ -99,4 +99,12 @@ class GameMapperTest {
         game.start();
         return game;
     }
+
+    @Test void toPublicGameStateDTO_null_returnsNull() {
+        assertThat(mapper.toPublicGameStateDTO(null)).isNull();
+    }
+
+    @Test void toFullGameStateDTO_null_returnsNull() {
+        assertThat(mapper.toFullGameStateDTO(null)).isNull();
+    }
 }
