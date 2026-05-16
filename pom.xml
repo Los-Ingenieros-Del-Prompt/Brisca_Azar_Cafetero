@@ -21,6 +21,32 @@
 		<sonar.coverage.jacoco.xmlReportPaths>
 			${project.build.directory}/site/jacoco/jacoco.xml
 		</sonar.coverage.jacoco.xmlReportPaths>
+		<!--
+		  sonar.coverage.exclusions: Sonar reads the JaCoCo XML but then applies
+		  its own exclusion filter on top. These must mirror the JaCoCo <excludes>
+		  below, using .java paths (not .class).
+		  Result: both tools count coverage on exactly the same set of files.
+		-->
+		<sonar.coverage.exclusions>
+			**/AzarcafeteroApplication.java,
+			**/infrastructure/config/BriscaApplicationConfig.java,
+			**/infrastructure/config/CorsConfig.java,
+			**/infrastructure/websocket/WebSocketConfig.java,
+			**/application/port/input/*.java,
+			**/application/port/output/*.java,
+			**/domain/exception/*.java,
+			**/domain/model/GameState.java,
+			**/domain/model/BotDifficulty.java,
+			**/domain/model/Suit.java,
+			**/domain/model/Rank.java
+		</sonar.coverage.exclusions>
+		<!-- Exclude from ALL Sonar analysis (no issues, no coverage) -->
+		<sonar.exclusions>
+			**/target/**,
+			**/AzarcafeteroApplication.java,
+			**/infrastructure/config/**,
+			**/infrastructure/websocket/WebSocketConfig.java
+		</sonar.exclusions>
 	</properties>
 
 	<dependencies>
@@ -50,7 +76,34 @@
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
 
-			<!-- JaCoCo: cobertura de código -->
+			<!--
+			  ══════════════════════════════════════════════════════════════
+			  JaCoCo exclusion policy — coordinated with sonar.coverage.exclusions
+			  ══════════════════════════════════════════════════════════════
+
+			  EXCLUDED (no real logic to test):
+			    · AzarcafeteroApplication     — main() entry point
+			    · BriscaApplicationConfig     — Spring @Bean wiring only
+			    · CorsConfig                  — trivial CORS mapping
+			    · WebSocketConfig             — STOMP broker config
+			    · application/port/input/*    — interfaces, zero bytecode
+			    · application/port/output/*   — interfaces, zero bytecode
+			    · domain/exception/*          — trivial super() constructors
+			    · GameState, BotDifficulty,
+			      Suit, Rank                  — pure enums, no logic
+
+			  INCLUDED (have tests, real logic):
+			    · GameService, GameMapper
+			    · BriscaBotDecisionService
+			    · BriscaWebSocketController
+			    · WebSocketEventListener, WebSocketGameEventPublisher
+			    · InMemoryGameRepository
+			    · HttpWalletClient, NoOpWalletClient, WalletOperationException
+			    · Card, Deck, Game, Player, Trick
+			    · GameRules, TrickResolver, ScoreCalculator
+			    · All DTOs with validation (AddBotCommand, CreateGameCommand, …)
+			  ══════════════════════════════════════════════════════════════
+			-->
 			<plugin>
 				<groupId>org.jacoco</groupId>
 				<artifactId>jacoco-maven-plugin</artifactId>
@@ -58,51 +111,49 @@
 				<configuration>
 					<excludes>
 						<exclude>com/aguardientes/azarcafetero/AzarcafeteroApplication.class</exclude>
-						<exclude>com/aguardientes/azarcafetero/infrastructure/config/**</exclude>
+						<exclude>com/aguardientes/azarcafetero/infrastructure/config/BriscaApplicationConfig.class</exclude>
+						<exclude>com/aguardientes/azarcafetero/infrastructure/config/CorsConfig.class</exclude>
 						<exclude>com/aguardientes/azarcafetero/infrastructure/websocket/WebSocketConfig.class</exclude>
-						<exclude>com/aguardientes/azarcafetero/infrastructure/websocket/WebSocketEventListener.class</exclude>
-						<exclude>com/aguardientes/azarcafetero/infrastructure/wallet/HttpWalletClient.class</exclude>
-						<exclude>com/aguardientes/azarcafetero/infrastructure/wallet/WalletOperationException.class</exclude>
-						<exclude>com/aguardientes/azarcafetero/domain/exception/**</exclude>
-						<exclude>com/aguardientes/azarcafetero/application/dto/**</exclude>
+						<exclude>com/aguardientes/azarcafetero/application/port/input/*.class</exclude>
+						<exclude>com/aguardientes/azarcafetero/application/port/output/*.class</exclude>
+						<exclude>com/aguardientes/azarcafetero/domain/exception/*.class</exclude>
 						<exclude>com/aguardientes/azarcafetero/domain/model/GameState.class</exclude>
 						<exclude>com/aguardientes/azarcafetero/domain/model/BotDifficulty.class</exclude>
 						<exclude>com/aguardientes/azarcafetero/domain/model/Suit.class</exclude>
 						<exclude>com/aguardientes/azarcafetero/domain/model/Rank.class</exclude>
-						<exclude>**/infrastructure/messaging/**</exclude>
 					</excludes>
 				</configuration>
 				<executions>
+					<!-- 1. Instrument agent before tests -->
 					<execution>
 						<id>prepare-agent</id>
 						<goals><goal>prepare-agent</goal></goals>
 					</execution>
+					<!-- 2. Generate XML/HTML report after tests (Sonar reads this) -->
 					<execution>
 						<id>report</id>
 						<phase>test</phase>
-						<goals>
-							<goal>report</goal>
-						</goals>
+						<goals><goal>report</goal></goals>
 					</execution>
+					<!-- 3. Fail build if line coverage < 80% -->
 					<execution>
 						<id>check</id>
 						<phase>verify</phase>
 						<goals><goal>check</goal></goals>
 						<configuration>
+							<!-- Must repeat exclusions: check goal uses its own config -->
 							<excludes>
 								<exclude>com/aguardientes/azarcafetero/AzarcafeteroApplication.class</exclude>
-								<exclude>com/aguardientes/azarcafetero/infrastructure/config/**</exclude>
+								<exclude>com/aguardientes/azarcafetero/infrastructure/config/BriscaApplicationConfig.class</exclude>
+								<exclude>com/aguardientes/azarcafetero/infrastructure/config/CorsConfig.class</exclude>
 								<exclude>com/aguardientes/azarcafetero/infrastructure/websocket/WebSocketConfig.class</exclude>
-								<exclude>com/aguardientes/azarcafetero/infrastructure/websocket/WebSocketEventListener.class</exclude>
-								<exclude>com/aguardientes/azarcafetero/infrastructure/wallet/HttpWalletClient.class</exclude>
-								<exclude>com/aguardientes/azarcafetero/infrastructure/wallet/WalletOperationException.class</exclude>
-								<exclude>com/aguardientes/azarcafetero/domain/exception/**</exclude>
-								<exclude>com/aguardientes/azarcafetero/application/dto/**</exclude>
+								<exclude>com/aguardientes/azarcafetero/application/port/input/*.class</exclude>
+								<exclude>com/aguardientes/azarcafetero/application/port/output/*.class</exclude>
+								<exclude>com/aguardientes/azarcafetero/domain/exception/*.class</exclude>
 								<exclude>com/aguardientes/azarcafetero/domain/model/GameState.class</exclude>
 								<exclude>com/aguardientes/azarcafetero/domain/model/BotDifficulty.class</exclude>
 								<exclude>com/aguardientes/azarcafetero/domain/model/Suit.class</exclude>
 								<exclude>com/aguardientes/azarcafetero/domain/model/Rank.class</exclude>
-								<exclude>**/infrastructure/messaging/**</exclude>
 							</excludes>
 							<rules>
 								<rule>
@@ -121,7 +172,7 @@
 				</executions>
 			</plugin>
 
-			<!-- SonarQube scanner — versión 3.x compatible con Spring Boot 3 -->
+			<!-- Sonar scanner — version 3.x, compatible with Spring Boot 3 -->
 			<plugin>
 				<groupId>org.sonarsource.scanner.maven</groupId>
 				<artifactId>sonar-maven-plugin</artifactId>

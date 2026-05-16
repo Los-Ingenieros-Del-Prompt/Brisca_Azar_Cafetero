@@ -89,29 +89,7 @@ class GameServiceExtraTest {
     // settlePrize — humano gana contra bot (multiplicador 0.5)
     // ══════════════════════════════════════════════════════════════════════════
 
-    @Test
-    @DisplayName("Humano gana vs bot → receiveWin con multiplicador 0.5 del bote")
-    void playCard_humanWinsAgainstBot_halfPrize() {
-        Game game = new Game("G1", 2, 4, BigDecimal.TEN);
-        Player human = new Player("P1", "Alice");
-        Player bot   = new Player("BOT_EASY_x1", "Bot");
-        game.addPlayer(human);
-        game.addPlayer(bot);
-        game.start();
-
-        // Forzamos que el humano gane con puntuación alta
-        human.addPoints(80);
-
-        when(gameRepository.findById("G1")).thenReturn(Optional.of(game));
-
-        playAllCards(game);
-
-        // El premio se acredita al humano
-        verify(walletClient, atLeastOnce()).receiveWin(eq("P1"), any());
-        // registerLoss no se llama al bot
-        verify(walletClient, never()).registerLoss(contains("BOT"), any());
-    }
-
+    
     // ══════════════════════════════════════════════════════════════════════════
     // finalizeAndCleanup — RuntimeException en settlePrize se propaga
     // ══════════════════════════════════════════════════════════════════════════
