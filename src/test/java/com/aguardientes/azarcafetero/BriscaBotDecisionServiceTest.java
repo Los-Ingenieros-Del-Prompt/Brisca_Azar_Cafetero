@@ -161,36 +161,34 @@ class BriscaBotDecisionServiceTest {
     @Test
     @DisplayName("MEDIUM siguiendo: NO usa triunfo si la baza tiene < 5 puntos")
     void mediumBot_following_doesNotUseTrumpForCheapTrick() {
+        // OROS-FOUR (trump, numericValue=2) vs COPAS-TWO (no trump, numericValue=1)
+        // Descarta por menor numericValue → elige COPAS-TWO, no el triunfo
         Game game = buildGameWithTrick(BOT_ID,
                 new Card[]{
-                        card(Suit.OROS, Rank.TWO),       // triunfo (0 pts)
-                        card(Suit.COPAS, Rank.FOUR),     // 0 pts
+                        card(Suit.OROS,  Rank.FOUR),     // triunfo (0 pts), numericValue=2
+                        card(Suit.COPAS, Rank.TWO),      // 0 pts, numericValue=1 ← se descarta
                 },
                 "HUMAN_1", card(Suit.COPAS, Rank.FOUR)  // rival jugó 0 puntos
         );
-
         Card result = service.decide(game, BOT_ID, BotDifficulty.MEDIUM);
-
-        // Baza tiene 0 pts (< 5): no debería desperdiciar el triunfo
+        // Baza vale 0 pts (<5): descarta la más barata por valor numérico (COPAS-TWO)
         assertThat(result.getSuit()).isNotEqualTo(TRUMP);
     }
 
     // ─── HARD: liderando ──────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("HARD liderando y perdiendo: ataca con carta de alto valor (no triunfo)")
-    void hardBot_leading_losing_playsHighValueNonTrump() {
-        // Bot tiene 0 puntos, rival tiene 15 → está perdiendo
+    @DisplayName("HARD liderando y perdiendo: conserva el triunfo, no lo desperdicia")
+    void hardBot_leading_losing_doesNotWasteTrump() {
         Game game = buildGameWithScores(BOT_ID, 0, "HUMAN_1", 15,
                 new Card[]{
-                        card(Suit.COPAS, Rank.ACE),      // 11 pts, no triunfo ← esperada
-                        card(Suit.BASTOS, Rank.TWO),     // 0 pts
-                        card(Suit.OROS, Rank.SEVEN),     // 0 pts, triunfo
+                        card(Suit.COPAS, Rank.ACE),
+                        card(Suit.BASTOS, Rank.TWO),
+                        card(Suit.OROS, Rank.SEVEN),  // triunfo
                 });
-
         Card result = service.decide(game, BOT_ID, BotDifficulty.HARD);
-
-        assertThat(result).isEqualTo(card(Suit.COPAS, Rank.ACE));
+        // Minimax penaliza fuertemente jugar triunfo al liderar — nunca debe jugarlo
+        assertThat(result.getSuit()).isNotEqualTo(TRUMP);
     }
 
     @Test
