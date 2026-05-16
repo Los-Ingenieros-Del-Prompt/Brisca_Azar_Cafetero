@@ -9,8 +9,8 @@ jobs:
     uses: ./.github/workflows/code-quality.yml
     with:
       java-version: '21'
-      sonar-project-key: 'azar-cafetero_brisca'
-      sonar-organization: 'azar-cafetero'
+      sonar-project-key: 'Los-Ingenieros-Del-Prompt_Brisca_Azar_Cafetero' 
+      sonar-organization: 'los-ingenieros-del-prompt' 
       coverage-threshold: 80
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
