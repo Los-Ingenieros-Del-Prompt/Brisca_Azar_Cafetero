@@ -1,4 +1,4 @@
-package com.aguardientes.azarcafetero;
+package com.aguardientes.azarcafetero.infrastructure;
 
 import com.aguardientes.azarcafetero.infrastructure.wallet.NoOpWalletClient;
 import org.junit.jupiter.api.*;

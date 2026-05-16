@@ -1,4 +1,4 @@
-package com.aguardientes.azarcafetero;
+package com.aguardientes.azarcafetero.application;
 
 import com.aguardientes.azarcafetero.application.dto.*;
 import com.aguardientes.azarcafetero.domain.model.*;

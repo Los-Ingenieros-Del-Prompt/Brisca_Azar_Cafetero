@@ -113,11 +113,14 @@ public class BriscaBotDecisionService {
             if (minTrump.isPresent()) return minTrump.get();
         }
 
-        // Descartar la más barata
+        // Descartar la más barata (intentando que no sea triunfo)
         return hand.stream()
+                .filter(c -> c.getSuit() != trump) // Prioriza descartar lo que NO es triunfo
                 .min(Comparator.comparingInt(Card::getPoints)
                         .thenComparingInt(Card::getNumericValue))
-                .orElse(hand.get(0));
+                .orElseGet(() -> hand.stream() // Si solo tiene triunfos, ni modo
+                        .min(Comparator.comparingInt(Card::getNumericValue))
+                        .orElse(hand.get(0)));
     }
 
     /**
@@ -136,14 +139,16 @@ public class BriscaBotDecisionService {
         boolean leading = trick.getPlayedCards().isEmpty();
 
         if (leading) {
-            // ─ Liderando la baza
-            // Preferimos cartas baratas no-triunfo para no arriesgar valor.
-            // Si vamos perdiendo, atacamos con cartas de alto valor.
-            if (card.getSuit() == trump) score -= 4.0;
+            // Si la carta es triunfo, la penalización debe ser MASIVA para evitar
+            // salir con triunfo a menos que sea la única opción.
+            if (card.getSuit() == trump) {
+                score -= 15.0; // Subimos de 4.0 a 15.0
+            }
+
             score -= card.getPoints() * 0.8;
 
             if (!isBotWinning(game, botId) && card.getPoints() >= 10) {
-                score += 3.0; // ataque agresivo cuando se va perdiendo
+                score += 3.0;
             }
 
         } else {
@@ -163,7 +168,7 @@ public class BriscaBotDecisionService {
 
         // Bonus estratégico: cuando se va ganando, conservar triunfos
         if (isBotWinning(game, botId) && card.getSuit() == trump) {
-            score -= 2.0;
+            score -= 20.0;
         }
 
         return score;
@@ -191,6 +196,17 @@ public class BriscaBotDecisionService {
     private Card decideHardMinimax(List<Card> hand, Game game, String botId) {
         Suit trump = game.getTrumpSuit();
         Trick currentTrick = game.getCurrentTrick();
+        boolean leading = currentTrick.getPlayedCards().isEmpty();
+
+        // Si el bot lidera y va ganando el juego, NO empezar con triunfo si tiene otra opción
+        if (leading && isBotWinning(game, botId)) {
+            Optional<Card> nonTrump = hand.stream()
+                    .filter(c -> c.getSuit() != trump)
+                    .min(Comparator.comparingInt(Card::getPoints));
+
+            if (nonTrump.isPresent()) return nonTrump.get();
+        }
+
         List<Card> unknownCards = getUnknownCards(game, botId);
 
         Card bestCard = null;

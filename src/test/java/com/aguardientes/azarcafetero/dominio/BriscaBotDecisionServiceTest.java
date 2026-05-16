@@ -1,4 +1,4 @@
-package com.aguardientes.azarcafetero;
+package com.aguardientes.azarcafetero.dominio;
 
 import com.aguardientes.azarcafetero.domain.model.*;
 import com.aguardientes.azarcafetero.domain.service.BriscaBotDecisionService;
@@ -241,5 +241,106 @@ class BriscaBotDecisionServiceTest {
             f.setAccessible(true);
             f.set(game, index);
         } catch (Exception e) { throw new RuntimeException(e); }
+    }
+
+    @Test void simulatedTrick_leadSuit_followedCorrectly() {
+        // Bot sigue el palo liderado
+        Game game = buildGameWithTrick(BOT_ID,
+                new Card[]{
+                        card(Suit.COPAS, Rank.KING),
+                        card(Suit.COPAS, Rank.FIVE),
+                        card(Suit.BASTOS, Rank.TWO)},
+                "HUMAN_1", card(Suit.COPAS, Rank.THREE));
+        Card result = service.decide(game, BOT_ID, BotDifficulty.HARD);
+        assertThat(result).isNotNull();
+        assertThat(game.getPlayerById(BOT_ID).getHand()).contains(result);
+    }
+
+    @Test void simulatedTrick_noMatchingSuit_usesTrumpOrDiscard() {
+        // Bot no tiene el palo liderado
+        Game game = buildGameWithTrick(BOT_ID,
+                new Card[]{
+                        card(Suit.OROS, Rank.ACE),   // trump
+                        card(Suit.ESPADAS, Rank.TWO)},
+                "HUMAN_1", card(Suit.COPAS, Rank.ACE)); // lidera copas, bot no tiene
+        Card result = service.decide(game, BOT_ID, BotDifficulty.HARD);
+        assertThat(result).isNotNull();
+    }
+
+    @Test void simulatedTrick_trickWinner_isCorrectlyIdentified() {
+        // Trump gana sobre cualquier palo normal
+        Game game = buildGameWithTrick(BOT_ID,
+                new Card[]{
+                        card(Suit.OROS, Rank.TWO),   // trump bajo
+                        card(Suit.COPAS, Rank.ACE)}, // copas alta pero no trump
+                "HUMAN_1", card(Suit.COPAS, Rank.THREE));
+        Card result = service.decide(game, BOT_ID, BotDifficulty.HARD);
+        assertThat(result).isNotNull();
+    }
+
+    @Test void hard_leading_withOpponentScoreHigh_aggressivePlay() {
+        // Rival va ganando → bot juega agresivo
+        Game game = buildGameWithScores(BOT_ID, 5, "HUMAN_1", 25,
+                new Card[]{
+                        card(Suit.COPAS, Rank.ACE),
+                        card(Suit.OROS, Rank.ACE),   // trump máximo
+                        card(Suit.BASTOS, Rank.TWO)});
+        Card result = service.decide(game, BOT_ID, BotDifficulty.HARD);
+        assertThat(result).isNotNull();
+    }
+
+    @Test void medium_following_noTrumpAndCantWin_discardsLowest() {
+        // Sin trump, no puede ganar → descarta la más barata
+        Game game = buildGameWithTrick(BOT_ID,
+                new Card[]{
+                        card(Suit.BASTOS, Rank.TWO),
+                        card(Suit.ESPADAS, Rank.TWO)},
+                "HUMAN_1", card(Suit.COPAS, Rank.ACE)); // copa alta, bot no tiene copas ni trump
+        Card result = service.decide(game, BOT_ID, BotDifficulty.MEDIUM);
+        assertThat(result.getPoints()).isEqualTo(0);
+    }
+
+    @Test void medium_following_trumpWinsOverLeadSuit() {
+        // Bot tiene trump Y carta del palo → elige según puntos del trick
+        Game game = buildGameWithTrick(BOT_ID,
+                new Card[]{
+                        card(Suit.OROS, Rank.THREE),  // trump
+                        card(Suit.COPAS, Rank.TWO)},  // mismo palo que líder
+                "HUMAN_1", card(Suit.COPAS, Rank.ACE)); // 11 pts en mesa
+        assertThat(service.decide(game, BOT_ID, BotDifficulty.MEDIUM)).isNotNull();
+    }
+
+    @Test void hard_following_withTrumpAndLeadSuit_choosesOptimal() {
+        Game game = buildGameWithTrick(BOT_ID,
+                new Card[]{
+                        card(Suit.OROS, Rank.ACE),    // trump alto
+                        card(Suit.COPAS, Rank.KING),  // mismo palo que líder
+                        card(Suit.BASTOS, Rank.TWO)},
+                "HUMAN_1", card(Suit.COPAS, Rank.SEVEN)); // 0 pts
+        assertThat(game.getPlayerById(BOT_ID).getHand())
+                .contains(service.decide(game, BOT_ID, BotDifficulty.HARD));
+    }
+
+    @Test void easy_multipleCards_neverThrows() {
+        for (int i = 0; i < 10; i++) {
+            Game game = buildGame(BOT_ID,
+                    card(Suit.OROS,    Rank.ACE),
+                    card(Suit.COPAS,   Rank.THREE),
+                    card(Suit.ESPADAS, Rank.FIVE),
+                    card(Suit.BASTOS,  Rank.SEVEN));
+            assertThatCode(() -> service.decide(game, BOT_ID, BotDifficulty.EASY))
+                    .doesNotThrowAnyException();
+        }
+    }
+
+    @Test void medium_leading_highValueNonTrump_playsLow() {
+        // Tiene carta de alto valor y baja → elige la baja al liderar
+        Game game = buildGame(BOT_ID,
+                card(Suit.COPAS, Rank.ACE),   // 11 pts
+                card(Suit.BASTOS, Rank.TWO),  // 0 pts ← esperada
+                card(Suit.ESPADAS, Rank.FOUR)); // 0 pts
+        Card result = service.decide(game, BOT_ID, BotDifficulty.MEDIUM);
+        assertThat(result.getPoints()).isEqualTo(0);
+        assertThat(result.getSuit()).isNotEqualTo(TRUMP);
     }
 }

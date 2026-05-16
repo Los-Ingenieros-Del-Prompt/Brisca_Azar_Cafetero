@@ -33,7 +33,7 @@ public class WebSocketEventListener {
         String playerName = (String) sessionAttributes.get("playerName");
         String gameId = (String) sessionAttributes.get("gameId");
 
-        if (playerId != null && gameId != null) {
+        if (playerId != null && !playerId.isBlank() && gameId != null && !gameId.isBlank()) {
             logger.info("Player {} ({}) disconnected from game {}", playerName, playerId, gameId);
             
             LeaveGameCommand command = new LeaveGameCommand(gameId, playerId);
