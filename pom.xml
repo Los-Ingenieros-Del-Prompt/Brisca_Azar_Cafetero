@@ -10,6 +10,7 @@
 	</parent>
 	<groupId>com.aguardientes</groupId>
 	<artifactId>azarcafetero</artifactId>
+	<name>Brisca_Azar_Cafetero</name>
 	<version>0.0.1-SNAPSHOT</version>
 
 	<properties>
