@@ -36,11 +36,13 @@ class GameRulesTest {
     }
 
     @Test void validateCardPlay_playerDoesNotHaveCard_throws() {
-        Game game = startedGame();
-        Player p = game.getCurrentPlayer();
+        Game game = new Game("G1", 2, 4, BigDecimal.TEN);
+        Player p = new Player("P1", "Alice");
+        p.addCard(new Card(Suit.COPAS, Rank.TWO));
+        game.addPlayer(p);
+        game.addPlayer(new Player("P2", "Bob"));
+
         Card fake = new Card(Suit.OROS, Rank.ACE);
-        // Ensure player doesn't have this specific card
-        if (p.getHand().contains(fake)) return; // skip if unlucky deal
         assertThatThrownBy(() -> rules.validateCardPlay(game, p.getId(), fake))
                 .isInstanceOf(InvalidMoveException.class);
     }
