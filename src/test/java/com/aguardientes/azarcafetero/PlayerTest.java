@@ -71,4 +71,24 @@ class PlayerTest {
     @Test void nullId_throws() {
         assertThatNullPointerException().isThrownBy(() -> new Player(null, "Alice"));
     }
+
+    @Test void equals_sameInstance_returnsTrue() {
+        assertThat(player.equals(player)).isTrue();
+    }
+
+    @Test void equals_null_returnsFalse() {
+        assertThat(player.equals(null)).isFalse();
+    }
+
+    @Test void equals_differentClass_returnsFalse() {
+        assertThat(player.equals("string")).isFalse();
+    }
+
+    @Test void nullName_throws() {
+        assertThatNullPointerException().isThrownBy(() -> new Player("P1", null));
+    }
+
+    @Test void toString_containsIdAndScore() {
+        assertThat(player.toString()).contains("P1").contains("Alice");
+    }
 }

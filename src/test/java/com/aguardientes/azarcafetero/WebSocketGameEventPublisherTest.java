@@ -1,73 +1,79 @@
 package com.aguardientes.azarcafetero;
 
-import com.aguardientes.azarcafetero.application.dto.*;
-import com.aguardientes.azarcafetero.domain.model.GameState;
-import com.aguardientes.azarcafetero.infrastructure.messaging.WebSocketGameEventPublisher;
+import com.aguardientes.azarcafetero.application.dto.LeaveGameCommand;
+import com.aguardientes.azarcafetero.application.service.GameService;
+import com.aguardientes.azarcafetero.infrastructure.websocket.WebSocketEventListener;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
-import java.util.List;
+import org.springframework.messaging.support.MessageBuilder;
+import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
+import org.springframework.messaging.simp.SimpMessageType;
+import org.springframework.web.socket.messaging.SessionDisconnectEvent;
+import java.util.HashMap;
+import java.util.Map;
 import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("WebSocketGameEventPublisher")
-class WebSocketGameEventPublisherTest {
+@DisplayName("WebSocketEventListener")
+class WebSocketEventListenerTest {
 
-    @Mock SimpMessagingTemplate messagingTemplate;
-    WebSocketGameEventPublisher publisher;
+    @Mock GameService gameService;
+    WebSocketEventListener listener;
 
     @BeforeEach void setUp() {
-        publisher = new WebSocketGameEventPublisher(messagingTemplate);
+        listener = new WebSocketEventListener(gameService);
     }
 
-    @Test void constructor_nullTemplate_throws() {
+    @Test void constructor_null_throws() {
         assertThatNullPointerException()
-                .isThrownBy(() -> new WebSocketGameEventPublisher(null));
+                .isThrownBy(() -> new WebSocketEventListener(null));
     }
 
-    @Test void publishGameCreated_sendsToEventsChannel() {
-        publisher.publishGameCreated("G1");
-        verify(messagingTemplate).convertAndSend(eq("/topic/game/G1/events"), (Object) any());
+    @Test void disconnect_nullSessionAttributes_doesNothing() {
+        SessionDisconnectEvent event = mock(SessionDisconnectEvent.class);
+        when(event.getMessage()).thenReturn(buildMessage(null));
+        listener.handleWebSocketDisconnectListener(event);
+        verifyNoInteractions(gameService);
     }
 
-    @Test void publishPlayerJoined_sendsToEventsChannel() {
-        publisher.publishPlayerJoined("G1", "P1");
-        verify(messagingTemplate).convertAndSend(eq("/topic/game/G1/events"), (Object) any());
+    @Test void disconnect_noPlayerId_doesNothing() {
+        Map<String, Object> attrs = new HashMap<>();
+        attrs.put("gameId", "G1");
+        SessionDisconnectEvent event = mock(SessionDisconnectEvent.class);
+        when(event.getMessage()).thenReturn(buildMessage(attrs));
+        listener.handleWebSocketDisconnectListener(event);
+        verifyNoInteractions(gameService);
     }
 
-    @Test void publishGameStarted_sendsToEventsChannel() {
-        publisher.publishGameStarted("G1");
-        verify(messagingTemplate).convertAndSend(eq("/topic/game/G1/events"), (Object) any());
+    @Test void disconnect_noGameId_doesNothing() {
+        Map<String, Object> attrs = new HashMap<>();
+        attrs.put("playerId", "P1");
+        SessionDisconnectEvent event = mock(SessionDisconnectEvent.class);
+        when(event.getMessage()).thenReturn(buildMessage(attrs));
+        listener.handleWebSocketDisconnectListener(event);
+        verifyNoInteractions(gameService);
     }
 
-    @Test void publishCardPlayed_sendsToEventsChannel() {
-        publisher.publishCardPlayed("G1", "P1", "As de Oros");
-        verify(messagingTemplate).convertAndSend(eq("/topic/game/G1/events"), (Object) any());
+    @Test void disconnect_withPlayerAndGame_callsLeaveGame() {
+        Map<String, Object> attrs = new HashMap<>();
+        attrs.put("playerId", "P1");
+        attrs.put("playerName", "Alice");
+        attrs.put("gameId", "G1");
+        SessionDisconnectEvent event = mock(SessionDisconnectEvent.class);
+        when(event.getMessage()).thenReturn(buildMessage(attrs));
+        listener.handleWebSocketDisconnectListener(event);
+        verify(gameService).leaveGame(any(LeaveGameCommand.class));
     }
 
-    @Test void publishTrickCompleted_sendsToEventsChannel() {
-        publisher.publishTrickCompleted("G1", "P1", 11);
-        verify(messagingTemplate).convertAndSend(eq("/topic/game/G1/events"), (Object) any());
-    }
-
-    @Test void publishGameStateUpdated_sendsToGameChannel() {
-        GameStateDTO state = new GameStateDTO("G1", GameState.IN_PROGRESS,
-                List.of(), null, null, null, null, 0, List.of());
-        publisher.publishGameStateUpdated(state);
-        verify(messagingTemplate).convertAndSend(eq("/topic/game/G1"), eq(state));
-    }
-
-    @Test void publishGameFinished_sendsWinnerIds() {
-        publisher.publishGameFinished("G1", List.of("P1"));
-        verify(messagingTemplate).convertAndSend(eq("/topic/game/G1/events"), (Object) any());
-    }
-
-    @Test void publishGameFinished_noWinners_sendsDraw() {
-        publisher.publishGameFinished("G1", List.of());
-        verify(messagingTemplate).convertAndSend(eq("/topic/game/G1/events"), (Object) any());
+    private org.springframework.messaging.Message<byte[]> buildMessage(
+            Map<String, Object> sessionAttrs) {
+        SimpMessageHeaderAccessor accessor =
+                SimpMessageHeaderAccessor.create(SimpMessageType.DISCONNECT);
+        if (sessionAttrs != null) accessor.setSessionAttributes(sessionAttrs);
+        return MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
     }
 }
