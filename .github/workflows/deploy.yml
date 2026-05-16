@@ -10,7 +10,7 @@ jobs:
     with:
       java-version: '21'
       sonar-project-key: 'Los-Ingenieros-Del-Prompt_Brisca_Azar_Cafetero' 
-      sonar-organization: 'los-ingenieros-del-prompt'
+      sonar-organization: 'los-ingenieros-del-prompt' 
       coverage-threshold: 80
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
