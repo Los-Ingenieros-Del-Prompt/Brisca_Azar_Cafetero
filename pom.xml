@@ -15,8 +15,8 @@
 	<properties>
 		<java.version>21</java.version>
 		<!-- SonarQube / SonarCloud -->
-		<sonar.projectKey>azar-cafetero_brisca</sonar.projectKey>
-		<sonar.organization>azar-cafetero</sonar.organization>
+		<<sonar.projectKey>Los-Ingenieros-Del-Prompt_Brisca_Azar_Cafetero</sonar.projectKey>
+		<sonar.organization>los-ingenieros-del-prompt</sonar.organization>
 		<sonar.host.url>https://sonarcloud.io</sonar.host.url>
 		<sonar.coverage.jacoco.xmlReportPaths>
 			${project.build.directory}/site/jacoco/jacoco.xml
