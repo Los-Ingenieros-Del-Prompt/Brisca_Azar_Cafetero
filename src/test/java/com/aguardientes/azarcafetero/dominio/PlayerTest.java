@@ -1,4 +1,4 @@
-package com.aguardientes.azarcafetero;
+package com.aguardientes.azarcafetero.dominio;
 
 import com.aguardientes.azarcafetero.domain.exception.InvalidMoveException;
 import com.aguardientes.azarcafetero.domain.model.*;

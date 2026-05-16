@@ -1,4 +1,4 @@
-package com.aguardientes.azarcafetero;
+package com.aguardientes.azarcafetero.infrastructure;
 
 import com.aguardientes.azarcafetero.infrastructure.wallet.HttpWalletClient;
 import com.aguardientes.azarcafetero.infrastructure.wallet.WalletOperationException;

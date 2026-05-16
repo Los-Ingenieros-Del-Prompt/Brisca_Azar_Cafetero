@@ -1,4 +1,4 @@
-package com.aguardientes.azarcafetero;
+package com.aguardientes.azarcafetero.infrastructure;
 
 import com.aguardientes.azarcafetero.application.dto.LeaveGameCommand;
 import com.aguardientes.azarcafetero.application.service.GameService;
@@ -75,5 +75,15 @@ class WebSocketEventListenerTest {
                 SimpMessageHeaderAccessor.create(SimpMessageType.DISCONNECT);
         if (sessionAttrs != null) accessor.setSessionAttributes(sessionAttrs);
         return MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
+    }
+
+    @Test void disconnect_emptyStringPlayerId_doesNothing() {
+        Map<String, Object> attrs = new HashMap<>();
+        attrs.put("playerId", "");
+        attrs.put("gameId", "G1");
+        SessionDisconnectEvent event = mock(SessionDisconnectEvent.class);
+        when(event.getMessage()).thenReturn(buildMessage(attrs));
+        listener.handleWebSocketDisconnectListener(event);
+        verifyNoInteractions(gameService);
     }
 }

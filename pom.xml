@@ -86,6 +86,7 @@
 						<exclude>com/aguardientes/azarcafetero/domain/model/BotDifficulty.class</exclude>
 						<exclude>com/aguardientes/azarcafetero/domain/model/Suit.class</exclude>
 						<exclude>com/aguardientes/azarcafetero/domain/model/Rank.class</exclude>
+						<exclude>**/infrastructure/messaging/**</exclude>
 					</excludes>
 				</configuration>
 				<executions>

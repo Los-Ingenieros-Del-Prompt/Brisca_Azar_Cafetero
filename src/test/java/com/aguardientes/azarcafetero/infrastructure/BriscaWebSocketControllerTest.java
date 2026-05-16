@@ -1,4 +1,4 @@
-package com.aguardientes.azarcafetero;
+package com.aguardientes.azarcafetero.infrastructure;
 
 import com.aguardientes.azarcafetero.application.dto.*;
 import com.aguardientes.azarcafetero.application.port.input.*;
@@ -136,4 +136,5 @@ class BriscaWebSocketControllerTest {
 
         assertThatCode(() -> controller.leaveGame(cmd, "G1")).doesNotThrowAnyException();
     }
+
 }

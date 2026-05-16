@@ -1,4 +1,4 @@
-package com.aguardientes.azarcafetero;
+package com.aguardientes.azarcafetero.dominio;
 
 import com.aguardientes.azarcafetero.domain.model.*;
 import com.aguardientes.azarcafetero.domain.service.TrickResolver;
