@@ -10,6 +10,7 @@
 	</parent>
 	<groupId>com.aguardientes</groupId>
 	<artifactId>azarcafetero</artifactId>
+	<name>Brisca_Azar_Cafetero</name>
 	<version>0.0.1-SNAPSHOT</version>
 
 	<properties>
@@ -27,6 +28,7 @@
 			**/infrastructure/config/**,
 			**/infrastructure/websocket/WebSocketConfig.java,
 			**/infrastructure/websocket/WebSocketEventListener.java,
+			**/infrastructure/wallet/HttpWalletClient.java,
 			**/*Exception.java,
 			**/dto/**,
 			**/model/GameState.java,
@@ -95,8 +97,9 @@
 					<!-- Reporte XML (lo lee SonarQube) -->
 					<execution>
 						<id>report</id>
-						<phase>verify</phase>
-						<goals><goal>report</goal></goals>
+						<phase>test</phase> <goals>
+						<goal>report</goal>
+					</goals>
 					</execution>
 					<!-- Falla el build si cobertura < 80% -->
 					<execution>

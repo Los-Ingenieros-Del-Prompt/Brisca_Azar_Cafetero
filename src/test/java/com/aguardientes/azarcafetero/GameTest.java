@@ -6,6 +6,7 @@ import org.junit.jupiter.api.*;
 import java.math.BigDecimal;
 import java.util.List;
 import static org.assertj.core.api.Assertions.*;
+import com.aguardientes.azarcafetero.domain.service.TrickResolver;
 
 @DisplayName("Game")
 class GameTest {
@@ -300,8 +301,7 @@ class GameTest {
 
     private String resolveWithFirstPlayer() {
         TrickResolver trickResolver = new TrickResolver();
-        String winnerId = trickResolver.resolveWinner(game.getCurrentTrick());
-        game.resolveTrick(winnerId);
+        String winnerId = trickResolver.determineWinner(game.getCurrentTrick(), game.getTrumpSuit());        game.resolveTrick(winnerId);
         assertThat(game.getCurrentPlayer().getId()).isEqualTo(winnerId);
         return winnerId;
     }
