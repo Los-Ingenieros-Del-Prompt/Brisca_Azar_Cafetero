@@ -16,6 +16,10 @@ on:
         description: 'SonarCloud organization'
         required: true
         type: string
+      coverage-threshold:
+        required: false
+        type: string
+        default: '0.80'
     secrets:
       SONAR_TOKEN:
         description: 'SonarCloud authentication token'
